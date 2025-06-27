@@ -24,3 +24,350 @@
 a. Склонируйте репозиторий git@github.com:mrutman/os.git. Изучите и запустите
     программу threads/thread.c. Добейтесь того, чтобы гарантированно выполнялись
     оба потока.
+
+    pthread_create
+        int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void*), void *arg);
+            *thread - указатель на объект pthread_t, который инициализируется.
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t. Если атрибуты не нужны, можно передать NULL.
+            *start_routine - указатель на функцию, которая запускается в потоке. Подобная функция должна принимать в качестве параметра 
+                указатель void*, вместо которого можно передать указатель на любой объект. Однако допускается только один аргумент. 
+                Соответственно если надо передать несколько значений, то можно оформить их в массив или структуру.
+            *arg: указатель void*, через который передается значение в запускаемую функцию.
+        
+        создает новый поток, с атрибутами, заданными в attr, и запускает в нем функцию start_routine с аргументом arg.
+
+        в моем случае: 
+            err = pthread_create(&tid, NULL, mythread, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_create.html
+        https://metanit.com/c/tutorial/11.1.php
+
+    pthread_join
+        int pthread_join(pthread_t thread, void **value_ptr);
+            thread - идентификатор потока, который должен завершиться.
+            *value_ptr - указатель на переменную, в которую будет записан результат выполнения потока.
+
+        переводит текущий поток (объект pthread_t) в состояние ожидания, пока не завершится другой поток. 
+
+        в моем случае: 
+            pthread_join(tid, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_join.html
+
+    в терминале выполняю (HTTPS-ссылка): 
+        git clone https://github.com/mrutman/os.git
+        cd os/threads
+
+    СЕЙЧАС ВЫПОЛНЯЮ ПРОГРАММУ ТАК:
+        cd a
+        gcc thread.c -o thread && ./thread
+    вывод: 
+        main [12817 9889 12817]: Hello from main!
+
+    ? Почему выполнился только один поток - main ?
+    - return в функции main приводит к завершению программы и соответственно процесса программы и всех ее потоков. Если поток не 
+        успел отработать до завершения процесса, то он тоже завершается. Чтобы выполнялись оба потока, нужно в main() не просто 
+        выходить после pthread_create(), а ждать его с помощью pthread_join().
+    
+    сделал программу mythread.c
+
+    в терминале выполняю:
+        gcc mythread.c -o thread2 && ./thread2
+    вывод: 
+        main [14087 9889 14087]: Hello from main!
+        mythread [14087 9889 14088]: Hello from mythread!
+
+
+
+b. Измените программу, добавив создание 5-ти потоков с одинаковой поточной функцией.
+    
+    в терминале выполняю:
+        gcc my5threads.c -o thread && ./thread
+    вывод:
+        main [18191 9889 18191]: Hello from main!
+        mythread 3 [18191 9889 18194]: Hello from mythread!
+        mythread 2 [18191 9889 18193]: Hello from mythread!
+        mythread 5 [18191 9889 18196]: Hello from mythread!
+        mythread 1 [18191 9889 18192]: Hello from mythread!
+        mythread 4 [18191 9889 18195]: Hello from mythread!
+        все 5 потоков завершили работу
+    
+    видим что pid у всех потоков одинаковый, также как и ppid, различаются только идентификаторы потоков. 
+
+
+
+c. В поточной функции распечатайте:
+    i. идентификаторы процесса, родительского процесса, потока. Для
+        получения идентификатора потока используйте функции pthread_self() и
+        gettid(). Сравните с тем что функция pthread_create() вернула через
+        первый аргумент. Объясните результат. Почему для сравнения
+        идентификаторов POSIX потоков надо использовать функцию
+        pthread_equal()?
+    ii. адреса локальной, локальной статической, локальной константной и
+        глобальной переменных. Объясните результат.
+
+    в терминале выполняю:
+        gcc my5threads.c -o thread && ./thread
+    вывод:
+        [main] pid=19618, ppid=9889, pthread_self()=137807034980160, gettid()=19618
+        [mythread 1] pid=19618, ppid=9889, pthread_self()=137807028815552, gettid()=19619
+        [mythread 1] pthread_equal(self, tids[0]) = 1
+        [mythread 1] &local_var = 0x7d55b2fffe98
+        [mythread 1] &local_static_var = 0x614682b3b014
+        [mythread 1] &local_const_var = 0x7d55b2fffe9c
+        [mythread 1] &global_var = 0x614682b3b010
+        
+        [mythread 2] pid=19618, ppid=9889, pthread_self()=137807018329792, gettid()=19620
+        [mythread 2] pthread_equal(self, tids[1]) = 1
+        [mythread 2] &local_var = 0x7d55b25ffe98
+        [mythread 2] &local_static_var = 0x614682b3b014
+        [mythread 2] &local_const_var = 0x7d55b25ffe9c
+        [mythread 2] &global_var = 0x614682b3b010
+        
+        [mythread 3] pid=19618, ppid=9889, pthread_self()=137807007844032, gettid()=19621
+        [mythread 3] pthread_equal(self, tids[2]) = 1
+        [mythread 3] &local_var = 0x7d55b1bffe98
+        [mythread 3] &local_static_var = 0x614682b3b014
+        [mythread 3] &local_const_var = 0x7d55b1bffe9c
+        [mythread 3] &global_var = 0x614682b3b010
+        
+        [mythread 4] pid=19618, ppid=9889, pthread_self()=137806997358272, gettid()=19622
+        [mythread 4] pthread_equal(self, tids[3]) = 1
+        [mythread 4] &local_var = 0x7d55b11ffe98
+        [mythread 4] &local_static_var = 0x614682b3b014
+        [mythread 4] &local_const_var = 0x7d55b11ffe9c
+        [mythread 4] &global_var = 0x614682b3b010
+        
+        [mythread 5] pid=19618, ppid=9889, pthread_self()=137806986872512, gettid()=19623
+        [mythread 5] pthread_equal(self, tids[4]) = 1
+        [mythread 5] &local_var = 0x7d55b07ffe98
+        [mythread 5] &local_static_var = 0x614682b3b014
+        [mythread 5] &local_const_var = 0x7d55b07ffe9c
+        [mythread 5] &global_var = 0x614682b3b010
+
+    pthread_self
+        pthread_t pthread_self(void);
+        
+        returns the ID of the calling thread. This is the same value that is returned in *thread in 
+            the pthread_create(3) call that created this thread. 
+
+        в моем случае:
+            pthread_t self = pthread_self();
+
+        https://www.opennet.ru/man.shtml?topic=pthread_self&category=3&russian=2
+
+    pthread_equal
+        int pthread_equal(pthread_t t1, pthread_t t2);
+
+        compares two thread identifiers. If the two thread IDs are equal, pthread_equal() returns 
+            a non-zero value; otherwise, it returns 0.  
+
+        в моем случае: 
+            pthread_t self = pthread_self();
+            ...
+            extern pthread_t tids[NUM_THREADS];
+            ...
+            pthread_equal(self, tids[id-1])
+        
+        https://www.opennet.ru/man.shtml?topic=pthread_equal&category=3&russian=2
+
+    ? Для получения идентификатора потока используйте функции pthread_self() и gettid(). Сравните с тем 
+        что функция pthread_create() вернула через первый аргумент. Объясните результат.
+    - При создании потока еще в main-е с помощью pthread_create(), я сохраняю его POSIX-идентификатор в первом 
+        аргументе (pthread_create(&tids[i], ...)). Уже внутри потока mythread, я вызываю pthread_self(), чтобы
+        узнать свой POSIX-идентификатор. А gettid() возвращает возвращает идентификатор потока, назначенный kernel, 
+        а не POSIX-идентификатор.
+
+        отсюда: https://clanguagestuff.blogspot.com/2013/08/gettid-vs-pthreadself.html
+        the difference between gettid() and the pthread_self() is:
+            1. POSIX thread IDs are assigned and maintained by the threading implementation. The thread ID returned 
+                by gettid() is a number (similar to a process ID) that is assigned by the kernel.
+            2. ID generated by the pthread_self() can be used after the completion of the thread but the ID genereated 
+                by the kernel can't be used even after the completion of the thread.
+
+        ответ: https://stackoverflow.com/questions/6372102/what-is-the-difference-between-pthread-self-and-gettid-which-one-should-i-u
+
+    ? Почему для сравнения идентификаторов POSIX потоков надо использовать функцию pthread_equal()?
+    - В main потоке pthread_create() возвращает через первый аргумент значение (записывает его в tids[i]), идентичное pthread_self() в потоке.
+        Из примера выше: 
+            pthread_self()=137807028815552
+            pthread_equal(self, tids[0]) = 1
+        Вкратце pthread_self() и pthread_create() возвращают один и тот же логический идентификатор для потока.
+
+    ? адреса локальной, локальной статической, локальной константной и глобальной переменных. Объясните результат.
+    - вижу что совпадают адреса у глобальной и локальной статической переменных. Остальные различаются. 
+        local_var и local_const_var лежат в стеке каждого потока, а у каждого потока стек - это своя отдельная область. 
+            Именно поэтому адреса у этих переменных меняются в зависимости от потока.
+        Показ символов executable файла thread: 
+            nm thread | grep 'global_var' 
+            nm thread | grep 'local_static_var'
+        вывод: 
+            0000000000004010 D global_var
+            0000000000004014 d local_static_var.0
+        смотрю секции ELF-файла: readelf -S thread | grep '\.data'
+        вывод: 
+            [25] .data             PROGBITS         0000000000004000  00003000
+        Значит обе переменной лежат в секции .data. .data в ELF-файле хранит инициализированные глобальные и статические 
+            переменные. При линковке в executable записываются их начальные значения (40-global_var, 100-local_static_var) и при 
+            загрузке программы в RAM эти байты будут в общем для всего процесса сегмент данных.
+        
+        Итак: одинаковые адреса в разных потоках - потому что это одна и та же область памяти процесса, которую разделяют все его потоки.
+
+    ? (из 4 лабы): почему local_static_var хранится в d а не в D 
+    - разница в связывани (связывание/linkage - определяет как сущности (перем, функции, классы, ...) видны в разных 
+        единицах трансляции): 
+        D означает глобальный символ данных, т.е. переменная имеет внешнее связывание <=> доступна за пределами файла.
+        d означает локальный символ данных, переменная имеет внутреннее связывание (видна только в этом объектном файле). 
+        static -> internal; extern -> external
+
+        static_var.0 - компилятор помечает такие переменные как локальные символы, потому что их область видимости 
+            ограничена функцией/файлом.
+    
+
+
+d. В поточной функции попробуйте изменить локальную и глобальную переменные. Видны ли изменения из других 
+    потоков? Объясните результат.
+
+    в терминале выполняю:
+        gcc my5threads.c -o thread
+        ./thread
+    вывод:
+        sorokinm@sorokinm-CREFG-XX:~/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d$ ./thread 
+        [main] pid=27539, ppid=9889, pthread_self()=127943796254528, gettid()=27539
+        [mythread 1] before: local_var=100, global_var=10
+        [mythread 1]  after: local_var=110, global_var=20
+
+        [mythread 2] before: local_var=100, global_var=20
+        [mythread 2]  after: local_var=110, global_var=30
+
+        [mythread 3] before: local_var=100, global_var=30
+        [mythread 3]  after: local_var=110, global_var=40
+
+        [mythread 5] before: local_var=100, global_var=40
+        [mythread 5]  after: local_var=110, global_var=50
+
+        [mythread 4] before: local_var=100, global_var=50
+        [mythread 4]  after: local_var=110, global_var=60
+
+        [main] все потоки завершили работу
+
+    Вижу что у каждого потока своё значение local_var (хранится на его стеке), поэтому изменение в одном потоке не затронет local_var в другом.
+        global_var живёт в общем сегменте данных, доступном всем потокам. Каждый раз, когда увеличиваю значение, это изменяет 
+        единственную ячейку памяти, и все потоки «увидят» новое значение при следующем чтении.
+
+    Напоминаю что глобальные и локальные static переменные лежат в .data сегменте, который есть общий для всех потоков.
+
+
+
+e. Изучите /proc/pid/maps для полученного процесса. Найдите в нем стеки потоков.
+
+    1 терминал:
+        gcc my5threads.c -o thread
+        ./thread
+    2 терминал: 
+        cat /proc/PID/maps 
+
+    покажи вывод до создания 5 доп потоков и после. Пример вывода:
+    ДО:
+    5d39421a5000-5d39421a6000 r--p 00000000 103:08 530521                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d/thread
+    5d39421a6000-5d39421a7000 r-xp 00001000 103:08 530521                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d/thread
+    5d39421a7000-5d39421a8000 r--p 00002000 103:08 530521                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d/thread
+    5d39421a8000-5d39421a9000 r--p 00002000 103:08 530521                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d/thread
+    5d39421a9000-5d39421aa000 rw-p 00003000 103:08 530521                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d/thread
+    5d3982101000-5d3982122000 rw-p 00000000 00:00 0                          [heap]
+    74a83e400000-74a83e428000 r--p 00000000 103:08 2257969                   /usr/lib/x86_64-linux-gnu/libc.so.6
+    74a83e428000-74a83e5b0000 r-xp 00028000 103:08 2257969                   /usr/lib/x86_64-linux-gnu/libc.so.6
+    74a83e5b0000-74a83e5ff000 r--p 001b0000 103:08 2257969                   /usr/lib/x86_64-linux-gnu/libc.so.6
+    74a83e5ff000-74a83e603000 r--p 001fe000 103:08 2257969                   /usr/lib/x86_64-linux-gnu/libc.so.6
+    74a83e603000-74a83e605000 rw-p 00202000 103:08 2257969                   /usr/lib/x86_64-linux-gnu/libc.so.6
+    74a83e605000-74a83e612000 rw-p 00000000 00:00 0 
+    74a83e76c000-74a83e76f000 rw-p 00000000 00:00 0 
+    74a83e784000-74a83e786000 rw-p 00000000 00:00 0 
+    74a83e786000-74a83e787000 r--p 00000000 103:08 2257966                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    74a83e787000-74a83e7b2000 r-xp 00001000 103:08 2257966                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    74a83e7b2000-74a83e7bc000 r--p 0002c000 103:08 2257966                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    74a83e7bc000-74a83e7be000 r--p 00036000 103:08 2257966                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    74a83e7be000-74a83e7c0000 rw-p 00038000 103:08 2257966                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    7ffed54a0000-7ffed54c2000 rw-p 00000000 00:00 0                          [stack]
+    7ffed557c000-7ffed5580000 r--p 00000000 00:00 0                          [vvar]
+    7ffed5580000-7ffed5582000 r-xp 00000000 00:00 0                          [vdso]
+    ffffffffff600000-ffffffffff601000 --xp 00000000 00:00 0                  [vsyscall]
+    
+    ПОСЛЕ:
+    5d39421a5000-5d39421a6000 r--p 00000000 103:08 530521                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d/thread
+    5d39421a6000-5d39421a7000 r-xp 00001000 103:08 530521                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d/thread
+    5d39421a7000-5d39421a8000 r--p 00002000 103:08 530521                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d/thread
+    5d39421a8000-5d39421a9000 r--p 00002000 103:08 530521                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d/thread
+    5d39421a9000-5d39421aa000 rw-p 00003000 103:08 530521                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_1/d/thread
+    5d3982101000-5d3982122000 rw-p 00000000 00:00 0                          [heap]
+    74a83b200000-74a83b201000 ---p 00000000 00:00 0 
+    74a83b201000-74a83ba01000 rw-p 00000000 00:00 0 
+    74a83bc00000-74a83bc01000 ---p 00000000 00:00 0 
+    74a83bc01000-74a83c401000 rw-p 00000000 00:00 0 
+    74a83c600000-74a83c601000 ---p 00000000 00:00 0 
+    74a83c601000-74a83ce01000 rw-p 00000000 00:00 0 
+    74a83d000000-74a83d001000 ---p 00000000 00:00 0 
+    74a83d001000-74a83d801000 rw-p 00000000 00:00 0 
+    74a83da00000-74a83da01000 ---p 00000000 00:00 0 
+    74a83da01000-74a83e201000 rw-p 00000000 00:00 0 
+    74a83e400000-74a83e428000 r--p 00000000 103:08 2257969                   /usr/lib/x86_64-linux-gnu/libc.so.6
+    74a83e428000-74a83e5b0000 r-xp 00028000 103:08 2257969                   /usr/lib/x86_64-linux-gnu/libc.so.6
+    74a83e5b0000-74a83e5ff000 r--p 001b0000 103:08 2257969                   /usr/lib/x86_64-linux-gnu/libc.so.6
+    74a83e5ff000-74a83e603000 r--p 001fe000 103:08 2257969                   /usr/lib/x86_64-linux-gnu/libc.so.6
+    74a83e603000-74a83e605000 rw-p 00202000 103:08 2257969                   /usr/lib/x86_64-linux-gnu/libc.so.6
+    74a83e605000-74a83e612000 rw-p 00000000 00:00 0 
+    74a83e76c000-74a83e76f000 rw-p 00000000 00:00 0 
+    74a83e784000-74a83e786000 rw-p 00000000 00:00 0 
+    74a83e786000-74a83e787000 r--p 00000000 103:08 2257966                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    74a83e787000-74a83e7b2000 r-xp 00001000 103:08 2257966                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    74a83e7b2000-74a83e7bc000 r--p 0002c000 103:08 2257966                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    74a83e7bc000-74a83e7be000 r--p 00036000 103:08 2257966                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    74a83e7be000-74a83e7c0000 rw-p 00038000 103:08 2257966                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    7ffed54a0000-7ffed54c2000 rw-p 00000000 00:00 0                          [stack]
+    7ffed557c000-7ffed5580000 r--p 00000000 00:00 0                          [vvar]
+    7ffed5580000-7ffed5582000 r-xp 00000000 00:00 0                          [vdso]
+    ffffffffff600000-ffffffffff601000 --xp 00000000 00:00 0                  [vsyscall]
+
+    Получается, что учитывая права стека: rw-p, кандидатами являются:
+    74a83b201000-74a83ba01000 rw-p 00000000 00:00 0 
+    74a83bc01000-74a83c401000 rw-p 00000000 00:00 0 
+    74a83c601000-74a83ce01000 rw-p 00000000 00:00 0 
+    74a83d001000-74a83d801000 rw-p 00000000 00:00 0  
+    74a83da01000-74a83e201000 rw-p 00000000 00:00 0 
+
+
+
+f. Запустите программу из-под strace. Найдите системные вызовы, которые создали ваши потоки.
+
+    в терминале выполняю:
+        strace ./thread 
+
+    вижу что за создание потоков (pthread_create()) работает сискол clone() - он вызывается 5 раз. 
+    
+    Пример в strace (1 из 5):
+    mmap(NULL, 8392704, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_STACK, -1, 0) = 0x70c824000000
+    mprotect(0x70c824001000, 8388608, PROT_READ|PROT_WRITE) = 0
+    rt_sigprocmask(SIG_BLOCK, ~[], [], 8)   = 0
+    clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|
+    CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x70c824800990, parent_tid=0x70c824800990, 
+    exit_signal=0, stack=0x70c824000000, stack_size=0x7fff80, tls=0x70c8248006c0} => {parent_tid=[34890]}, 88) = 34890
+    Пояснения:
+    mmap - выделяем 8392704 байт (примерно 8МБ) для стека потока
+    mprotect - устанавливаем права доступа на стек
+    clone - создаем поток
+
+    ? clone() vs fork() 
+        1 кастомная точка входа дочернего процесса - fn с аргументом arg.
+            Новый процесс начинает исполнение именно с функции fn, а не с 
+                точки системного вызова, как при fork()
+        2 указываю кастомную область памяти под стек ребенка - child_stack
+        3 когда fn(arg) завершится (возвратит управление), дочерний процесс 
+            завершится с кодом возврата, равным возвращённому значению fn, 
+            либо может завершить работу явно через exit() или после 
+            фатального сигнала.
+            (у fork() сигнал возвращения - всегда SIGCHLD)
+        
+        int clone(int (*fn)(void *), void *child_stack, int flags, void *arg);
+        pid_t fork(void);  
+
+        подробнее здесь: https://stackoverflow.com/questions/4856255/the-difference-between-fork-vfork-exec-and-clone

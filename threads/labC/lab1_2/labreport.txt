@@ -1,0 +1,199 @@
+1.2. Потоки Joinable and Detached.
+    a. Напишите программу, в которой основной поток будет дожидаться завершения
+        созданного потока.
+    b. Измените программу так чтобы созданный поток возвращал число 42, а
+        основной поток получал это число и распечатывал.
+    c. Измените программу так чтобы созданный поток возвращал указатель на строку
+        “hello world”, а основной поток получал этот указатель и распечатывал строку.
+    d. Напишите программу, которая в бесконечном цикле будет создавать поток, с
+        поточной функцией, которая выводит свой идентификатор потока и
+        завершается. Запустите. Объясните результат.
+    e. Добавьте вызов pthread_detach() в поточную функцию. Объясните результат.
+    f. Вместо вызова pthread_detach() передайте в pthread_create() аргументы,
+        задающие тип потока - DETACHED. Запустите, убедитесь что поведение не
+        изменилось.
+
+
+
+a. Напишите программу, в которой основной поток будет дожидаться завершения
+    созданного потока.
+
+    в терминале выполняю: 
+        gcc join_example.c -o thread && ./thread
+    вывод: 
+        [main] создание потока
+        [worker] поток 1 запущен
+        [worker] поток 1 завершил работу
+        [main] поток worker завершил работу
+    
+    pthread_create
+        int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void*), void *arg);
+            *thread - указатель на объект pthread_t, который инициализируется.
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t. Если атрибуты не нужны, можно передать NULL.
+            *start_routine - указатель на функцию, которая запускается в потоке. Подобная функция должна принимать в качестве параметра 
+                указатель void*, вместо которого можно передать указатель на любой объект. Однако допускается только один аргумент. 
+                Соответственно если надо передать несколько значений, то можно оформить их в массив или структуру.
+            *arg: указатель void*, через который передается значение в запускаемую функцию.
+        
+        создает новый поток, с атрибутами, заданными в attr, и запускает в нем функцию start_routine с аргументом arg.
+
+        в моем случае: 
+            err = pthread_create(&tid, NULL, mythread, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_create.html
+        https://metanit.com/c/tutorial/11.1.php
+
+    pthread_join
+        int pthread_join(pthread_t thread, void **value_ptr);
+            thread - идентификатор потока, который должен завершиться.
+            *value_ptr - указатель на переменную, в которую будет записан результат выполнения потока.
+
+        переводит текущий поток (объект pthread_t) в состояние ожидания, пока не завершится другой поток. 
+
+        в моем случае: 
+            pthread_join(tid, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_join.html
+
+
+
+b. Измените программу так чтобы созданный поток возвращал число 42, а
+    основной поток получал это число и распечатывал.
+
+    в терминале выполняю: 
+        cd ../b
+        gcc join_example.c -o thread && ./thread
+    вывод: 
+        [main] создание потока
+        [worker] поток 1 запущен
+        [worker] поток 1 завершил работу
+        [main] поток worker вернул значение 42
+
+    для того чтобы поток возвращал число 42, нужно:
+        1) в worker добавить возвращаемое значение: (void*)(long)42
+        2) изменить второй параметр pthread_join с NULL на указатель &retval, и перевожу возвращаемое значение обратно в int.
+
+    ? почему такой тип данных у возвращаемого значения? Причем здесь long?
+    - В POSIX‑API поток всегда возвращает значение типа void*. А long занимает 64 бит, как и void*. 
+        Когда писал (void*)42, я ловил предупреждение о несовместимости размеров:
+            join_example.c: In function ‘main’:
+            join_example.c:37:18: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+            37 |     int result = (int)retval;
+                |                  ^
+        Поэтому return value в worker потоке именно: (void*)(long)42. А уже в main (int)(long)retval - отбросил старшие 32 бита.
+        Они точно нули так как я изначально упаковывал int в long (32 в 64).
+
+
+
+c. Измените программу так чтобы созданный поток возвращал указатель на строку
+    “hello world”, а основной поток получал этот указатель и распечатывал строку.
+
+    в терминале выполняю: 
+        cd ../c
+        gcc join_example.c -o thread && ./thread
+    вывод:
+        [main] создание потока
+        [worker] поток 1 запущен
+        [worker] поток 1 завершил работу
+        [main] поток worker вернул строку: 'hello world'
+
+    
+
+d. Напишите программу, которая в бесконечном цикле будет создавать поток, с
+    поточной функцией, которая выводит свой идентификатор потока и
+    завершается. Запустите. Объясните результат.
+
+    в терминале выполняю: 
+        cd ../d
+        gcc mythread.c -o thread && ./thread
+    вывод:
+        ...
+        [func] pthread_self() = 134305370080960
+        [func] pthread_self() = 134305359595200
+        [main] pthread_create() failed: Resource temporarily unavailable
+        [main] все потоки завершили работу
+
+    Быстро печатаются идентификаторы новых потоков. Потоки сразу завершают выполнение (terminate), но из-за 
+        отсутствия pthread_join() или pthread_detach() они остаются zombie-потоками.
+    Zombie thread - joinable thread which has terminated, but which hasn't been joined. 
+        Normally, either a thread should be joined at some time, or it should be detached. 
+        Otherwise, the OS maintains its state for some possible future join, which takes resources. 
+        Именно поэтому и читаю сообщение: Resource temporarily unavailable.
+    ответ взял здесь: https://stackoverflow.com/questions/6984576/zombie-threads-on-posix-systems
+
+    
+
+e. Добавьте вызов pthread_detach() в поточную функцию. Объясните результат.
+
+    в терминале выполняю: 
+        cd ../e
+        gcc mythread.c -o thread && ./thread
+    теперь вижу что в выводе tid не падают, как это было в предыдущем пункте d. 
+    Благодаря pthread_detach() внутренние ресурсы потоков автоматически выпускаются 
+        обратно в систему без необходимости join()-а другого потока с этим завершенным потоком.
+
+    pthread_detach
+        int pthread_detach(pthread_t thread);
+            thread - идентификатор потока, который необходимо отделить (перевести в состояние "detached"). 
+                Его можно получить с помощью pthread_create() или pthread_self().
+        
+        переводит поток в detached‑состояние: после его завершения ОС сразу освобождает все внутренние 
+            ресурсы этого потока, и уже нельзя вызвать pthread_join для этого потока.
+
+        в моем случае:
+            pthread_detach(tid);
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_detach.html
+        https://www.opennet.ru/man.shtml?topic=pthread_detach&category=3&russian=2
+
+
+
+f. Вместо вызова pthread_detach() передайте в pthread_create() аргументы, 
+    задающие тип потока - DETACHED. Запустите, убедитесь что поведение не
+    изменилось.
+
+    в терминале выполняю: 
+        cd ../f
+        gcc mythread.c -o thread && ./thread
+
+    атрибуты - набор настроек, которые можно передать потоку в момент его создания, чтобы управлять поведением и ресурсами.
+    
+    pthread_attr_init
+        int pthread_attr_init(pthread_attr_t *attr);
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t.
+        
+        создает объект pthread_attr_t attr, где каждому атрибуту задается значение по умолчанию.
+
+        в моем случае: 
+            pthread_attr_init(&attr);
+
+        https://www.opennet.ru/man.shtml?topic=pthread_attr_init&category=3&russian=4
+
+    pthread_attr_setdetachstate
+        int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate);
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t.
+            detachstate - тип атрибутов потока, который задаем. Возможные значения: 
+                1) PTHREAD_CREATE_JOINABLE (default) 0 поток создаётся joinable, т.е. 
+                    требует вызова pthread_join() для освобождения ресурсов.
+                2) PTHREAD_CREATE_DETACHED - поток создаётся detached, т.е. сам 
+                    освобождает свои ресурсы при завершении.
+
+        настройка атрибутов создаваемого pthread_create() потока
+
+        в моем случае:
+            pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+        https://www.opennet.ru/man.shtml?topic=pthread_attr_setdetachstate&category=3&russian=2
+
+    pthread_attr_destroy
+        int pthread_attr_destroy(pthread_attr_t *attr);
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t.
+
+        удаляет объект pthread_attr_t attr.
+        Removes the definition of the thread attributes object. An error results if a 
+            thread attributes object is used after it has been destroyed.
+
+        в моем случае:
+            pthread_attr_destroy(&attr);
+
+        https://www.ibm.com/docs/en/zos/2.4.0?topic=functions-pthread-attr-destroy-destroy-thread-attributes-object

@@ -1,0 +1,134 @@
+1.3. Передача параметров в поточную функцию.
+    a. Создайте структуру с полями типа int и char*. Создайте экземпляр этой
+        структуры и проинициализируйте. Создайте поток и передайте указатель на эту
+        структуру в качестве параметра. В поточной функции распечатайте содержимое
+        структуры.
+    b. Измените программу так чтобы поток создавался как detached поток. Объясните
+        в какой области памяти нужно располагать структуру в этом случае.
+
+
+
+a. Создайте структуру с полями типа int и char*. Создайте экземпляр этой
+    структуры и проинициализируйте. Создайте поток и передайте указатель на эту
+    структуру в качестве параметра. В поточной функции распечатайте содержимое
+    структуры.
+
+    в терминале выполняю: 
+        cd a
+        gcc mythread.c -o thread && ./thread
+    вывод: 
+        [func] number = 123, message = hello everynyan
+        [main] все потоки завершили работу
+
+    pthread_create
+        int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void*), void *arg);
+            *thread - указатель на объект pthread_t, который инициализируется.
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t. Если атрибуты не нужны, можно передать NULL.
+            *start_routine - указатель на функцию, которая запускается в потоке. Подобная функция должна принимать в качестве параметра 
+                указатель void*, вместо которого можно передать указатель на любой объект. Однако допускается только один аргумент. 
+                Соответственно если надо передать несколько значений, то можно оформить их в массив или структуру.
+            *arg: указатель void*, через который передается значение в запускаемую функцию.
+        
+        создает новый поток, с атрибутами, заданными в attr, и запускает в нем функцию start_routine с аргументом arg.
+
+        в моем случае: 
+            err = pthread_create(&tid, NULL, mythread, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_create.html
+        https://metanit.com/c/tutorial/11.1.php
+
+    pthread_join
+        int pthread_join(pthread_t thread, void **value_ptr);
+            thread - идентификатор потока, который должен завершиться.
+            *value_ptr - указатель на переменную, в которую будет записан результат выполнения потока.
+
+        переводит текущий поток (объект pthread_t) в состояние ожидания, пока не завершится другой поток. 
+
+        в моем случае: 
+            pthread_join(tid, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_join.html
+
+    strdup
+        char *strdup(const char *str);
+            str - указатель на строку, которую нужно скопировать.
+
+        создает копию строки str и возвращает указатель на новую копию.
+        путем обращения к функции malloc() выделяет память, достаточную для хранения дубликата строки, 
+            на которую указывает str, а затем производит копирование этой строки в выделенную область 
+            и возвращает указатель на нее.
+        ! The returned pointer must be passed to free to avoid a memory leak.
+
+        в моем случае:
+            targ.message = strdup("hello everynyan");
+            ...
+            free(targ.message);
+
+        https://www.c-cpp.ru/content/strdup-fstrdup
+        https://pubs.opengroup.org/onlinepubs/9699919799/functions/strdup.html
+
+
+
+b. Измените программу так чтобы поток создавался как detached поток. Объясните
+    в какой области памяти нужно располагать структуру в этом случае.
+
+    в терминале выполняю:
+        cd ../b
+        gcc mythread.c -o thread && ./thread
+    вывод:
+        [main] создание потоков в detached состоянии
+        [func] number = 456, message = hello detached everynyan
+        [main] все потоки завершили работу
+
+    pthread_attr_init
+        int pthread_attr_init(pthread_attr_t *attr);
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t.
+        
+        создает объект pthread_attr_t attr, где каждому атрибуту задается значение по умолчанию.
+
+        в моем случае: 
+            pthread_attr_init(&attr);
+
+        https://www.opennet.ru/man.shtml?topic=pthread_attr_init&category=3&russian=4
+
+    pthread_attr_setdetachstate
+        int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate);
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t.
+            detachstate - тип атрибутов потока, который задаем. Возможные значения: 
+                1) PTHREAD_CREATE_JOINABLE (default) 0 поток создаётся joinable, т.е. 
+                    требует вызова pthread_join() для освобождения ресурсов.
+                2) PTHREAD_CREATE_DETACHED - поток создаётся detached, т.е. сам 
+                    освобождает свои ресурсы при завершении.
+
+        настройка атрибутов создаваемого pthread_create() потока
+
+        в моем случае:
+            pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+        https://www.opennet.ru/man.shtml?topic=pthread_attr_setdetachstate&category=3&russian=2
+
+    pthread_attr_destroy
+        int pthread_attr_destroy(pthread_attr_t *attr);
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t.
+
+        удаляет объект pthread_attr_t attr.
+        Removes the definition of the thread attributes object. An error results if a 
+            thread attributes object is used after it has been destroyed.
+
+        в моем случае:
+            pthread_attr_destroy(&attr);
+
+        https://www.ibm.com/docs/en/zos/2.4.0?topic=functions-pthread-attr-destroy-destroy-thread-attributes-object
+
+    ? Объясните в какой области памяти нужно располагать структуру в этом случае.
+    - не в стеке, так как переменная targ (указатель на структуру в стеке) недоступна для detached потока 
+        после выхода из main.
+        ! Аргумент, лежащий на стеке нельзя передавать в detached поток - он может превратится в висячий после 
+            выхода из функции.
+        В качестве решения предлагаю размещать структуру в куче - она существует до тех пор, пока поток сам её не 
+        освободит.
+
+        Пример такой ошибки: 
+            gcc bad_detached_variable.c -o thread2 && ./thread2
+
+        Поток может начать выполняться после выхода main(), тогда стек main-а уже разрушен и указатель станет висячим.

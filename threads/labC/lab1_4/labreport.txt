@@ -1,0 +1,225 @@
+1.4 Прерывание потока.
+    a. Напишите программу, в которой поточная функция в бесконечном цикле
+        распечатывает строки. Используйте pthread_cancel() для того чтобы ее
+        остановить.
+    b. Измените программу так чтобы поточная функция ничего не распечатывала, а в
+        бесконечном цикле увеличивала счетчик на 1. Используйте pthread_cancel() для
+        того чтобы ее остановить. Объясните результат. Что можно сделать, чтобы
+        pthread_cancel() прервал поток?
+    c. В поточной функции выделите память под строку “hello world” с помощью
+        malloc(). Распечатывайте в бесконечном цикле полученную строку. Используйте
+        pthread_cancel() для того чтобы прервать поточную функцию. Добейтесь чтобы
+        по завершению память, выделенная под строку освобождалась. Используйте
+        pthread_cleanup_push/pop().
+
+
+
+a. Напишите программу, в которой поточная функция в бесконечном цикле
+    распечатывает строки. Используйте pthread_cancel() для того чтобы ее
+    остановить.
+
+    в терминале выполняю: 
+        cd a
+        gcc cancel_thread.c -o thread && ./thread
+    вывод:
+        [func] thread printing...
+        [func] thread printing...
+        [func] thread printing...
+        [main] canceling func thread...
+        [main] func thread canceled
+
+    pthread_create
+        int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void*), void *arg);
+            *thread - указатель на объект pthread_t, который инициализируется.
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t. Если атрибуты не нужны, можно передать NULL.
+            *start_routine - указатель на функцию, которая запускается в потоке. Подобная функция должна принимать в качестве параметра 
+                указатель void*, вместо которого можно передать указатель на любой объект. Однако допускается только один аргумент. 
+                Соответственно если надо передать несколько значений, то можно оформить их в массив или структуру.
+            *arg: указатель void*, через который передается значение в запускаемую функцию.
+        
+        создает новый поток, с атрибутами, заданными в attr, и запускает в нем функцию start_routine с аргументом arg.
+
+        в моем случае: 
+            err = pthread_create(&tid, NULL, mythread, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_create.html
+        https://metanit.com/c/tutorial/11.1.php
+
+    pthread_join
+        int pthread_join(pthread_t thread, void **value_ptr);
+            thread - идентификатор потока, который должен завершиться.
+            *value_ptr - указатель на переменную, в которую будет записан результат выполнения потока.
+
+        переводит текущий поток (объект pthread_t) в состояние ожидания, пока не завершится другой поток. 
+
+        в моем случае: 
+            pthread_join(tid, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_join.html
+
+    pthread_setcancelstate
+        int pthread_setcancelstate(int state, int *oldstate);
+            state - новое состояние отмены.
+            oldstate - указатель на область памяти, где функция может хранить старое состояние отмены.
+
+        КОГДА будет прерван поток.
+        устанавливает новое состояние отмены вызывающего потока в состояние state и возвращает предыдущее состояние отмены в 
+            oldstate (если oldstate не NULL).
+        варианты состояний отмены state:
+            PTHREAD_CANCEL_ENABLE - default state. Запрос на cancel будет принят - cancel type определяет, когда происходит отмена. 
+            PTHREAD_CANCEL_DISABLE - отмена отключена. Запрос на cancel блокирован до того как не установится 
+                состояние PTHREAD_CANCEL_ENABLE.
+
+        в моем случае:
+            pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_setcancelstate.html
+        https://www.opennet.ru/man.shtml?topic=pthread_setcancelstate&category=3&russian=4
+
+    pthread_setcanceltype
+        int pthread_setcanceltype( int type, int *oldtype );
+            type - новый тип отмены.
+            oldtype - указатель на область памяти, где функция может хранить старый тип отмены.
+
+        ГДЕ будет прерван поток.
+        устанавливает новый тип прерывания исполнения вызывающего потока на тип type и возвращает предыдущий тип отмены в 
+            oldtype (если oldtype не NULL).
+        варианты типов отмены type:
+            PTHREAD_CANCEL_ASYNCHRONOUS - если прерывание исполнения включено, новые или ожидающие запросы на отмену могут 
+                быть обработаны немедленно. Т. е. вызов pthread_cancel() приводит к немедленному прерыванию исполнения 
+                потока.
+            PTHREAD_CANCEL_DEFERRED - default state. Если прерывание исполнения включено, запросы на прерывание ожидают 
+                точки отмены. Список точек отмены смотри здесь: https://man7.org/linux/man-pages/man7/pthreads.7.html
+                В моем коде используются 2 точки отмены: printf и sleep.
+
+        в моем случае:
+            pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_setcanceltype.html
+        https://www.opennet.ru/cgi-bin/opennet/man.cgi?topic=pthread_setcanceltype
+
+    pthread_cancel
+        int pthread_cancel( pthread_t thread );
+            thread - идентификатор потока, чье выполнение необходимо прервать. Он может быть получен с помощью 
+                pthread_create() или pthread_self().
+
+        Запросить прерывание выполнения потока (используя точки остановки).
+        Если по простому, то pthread_cancel() отмечает поток, который указан у него параметром для отмены.
+            Это значит что когда этот поток дойдет до точки отмены, то он будет прерван.
+
+        в моем случае: 
+            pthread_cancel(tid)
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_cancel.html
+        https://man7.org/linux/man-pages/man3/pthread_cancel.3.html
+
+    в коде я в функции потока func() пишу следующее:
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+        pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
+    но эти значения установлены по умолчанию, поэтому можно не писать/закомментировать.
+
+
+b. Измените программу так чтобы поточная функция ничего не распечатывала, а в
+    бесконечном цикле увеличивала счетчик на 1. Используйте pthread_cancel() для
+    того чтобы ее остановить. Объясните результат. Что можно сделать, чтобы
+    pthread_cancel() прервал поток?
+
+    в терминале выполняю: 
+        cd ../b
+        gcc cancel_thread.c -o thread && ./thread
+    вывод:
+        [main] canceling func thread...
+
+    ? Объясните результат. Что можно сделать, чтобы pthread_cancel() прервал поток?
+    - поток func никогда не завершится, потому что по умолчанию cancel type потока - DEFERRED. 
+        Значит запрос на прерывание потока удовлетворяется только когда поток достигает точки отмены. 
+        Т.к. в пункте b. я изменил вызов printf() и sleep(), которые являлись точками отмены, на 
+        инкременирование счетчика counter, что не есть точка отмены, то поток func не прерывается.
+
+        Способы застваить pthread_cancel() прервать поток:
+            1) установить cancel type потока в ASYNCHRONOUS:
+                pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+            2) внутри цикла написать:
+                pthread_testcancel();
+                это точка отмены. При каждом вызове она проверяет флаг и, 
+                если был pthread_cancel(), бросает PTHREAD_CANCELED.
+
+        pthread_testcancel
+            void pthread_testcancel(void);
+
+            Создать точку остановки в вызывающем потоке. Если обработка точек остановки отключена,
+                то функция ничего не делает. 
+
+            https://help.kpda.ru/neutrino/2021/help/index.jsp?topic=%2Fru.kpda.doc.os%2Fhtml%2Fprogrammers_guide%2Flibraries%2Flibc%2Fp%2Fpthread_testcancel.html
+            https://man7.org/linux/man-pages/man3/pthread_testcancel.3.html
+
+
+
+c. В поточной функции выделите память под строку “hello world” с помощью
+    malloc(). Распечатывайте в бесконечном цикле полученную строку. Используйте
+    pthread_cancel() для того чтобы прервать поточную функцию. Добейтесь чтобы
+    по завершению память, выделенная под строку освобождалась. Используйте
+    pthread_cleanup_push/pop().
+
+    в терминале выполняю: 
+        cd ../c
+        gcc cancel_thread.c -o thread && ./thread
+    вывод:
+        [func] hello world
+        [func] hello world
+        [func] hello world
+        [main] canceling func thread...
+        [func] очистка памяти по адресу: 0x70e300000b70
+        [main] func thread canceled
+
+    strcpy
+        char *strcpy(char *str1, const char *str2)
+            *str1 - указатель на буфер, в который будет скопирована строка
+            *str2 - указатель на буфер, из которого будет скопирована строка
+
+        Копирует строку str2 в буфер str1. Аргумент str2 должен быть указателем на строку, оканчивающуюся нулем. 
+            Функция strcpy() возвращает указатель на str1.
+
+        в моем случае: 
+            strcpy(msg, "hello world");
+
+        https://www.c-cpp.ru/content/strcpy
+
+    pthread_cleanup_push
+        void pthread_cleanup_push( void (routine)( void* ), void *arg );
+            routine - указатель на функцию - обработчик очистки. Ее нужно добавить в стек потока.
+            arg - аргумент функции routine.
+
+        Добавить на вершину стека вызовов обработчик прерывания потока. 
+        Фактически это деструктор при прерывании выполнения потока (pthread_cancel()).
+
+        в моем случае: 
+            pthread_cleanup_push(cleanup_handler, msg);
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_cleanup_push.html
+
+    pthread_cleanup_pop
+        void pthread_cleanup_pop(int execute);
+            execute - если не ноль, то вызывается обработчик очистки.
+
+        Точно извлекает с вершины стека вызовов обработчик прерывания потока, но вызывает его только если execute != 0.
+
+        в моем случае:
+            pthread_cleanup_pop(1);
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_cleanup_push.html
+        https://pubs.opengroup.org/onlinepubs/009696699/functions/pthread_cleanup_pop.html
+        
+    план работы: 
+        1) в main создаю поток: pthread_create(&tid, NULL, func, NULL).
+        2) в func вызываю pthread_cleanup_push(cleanup_handler, msg);
+            добавил в стек потока func обработчик cleanup_handler, которому передаётся аргумент msg.
+        3) в бесконечном цикле поток func реагирует на pthread_cancel() только в точке отмены sleep(1).
+        4) в main после sleep(3) вызван pthread_cancel(tid).
+        5) как только поток func дойдет до следующей точки отмены sleep(1), он увидит что у него стоит 
+            флаг отмены и начнет свое прерывание (вызван pthread_cancel()):
+            5.1) вызов всех зарегистрированных cleanup_handler-ов в порядке LIFO. У меня один.
+            5.2) завершение потока с значением PTHREAD_CANCELED.
+        6) возврат в main через pthread_join(tid, &retval).
+
+        

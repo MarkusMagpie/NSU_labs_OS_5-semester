@@ -1,0 +1,155 @@
+1.5. Обработка сигналов в многопоточной программе.
+    a. Напишите программу с тремя потоками, такими что: первый поток блокирует
+        получения всех сигналов, второй принимает сигнал SIGINT при помощи
+        обработчика сигнала, а третий - сигнал SIGQUIT при помощи функции
+        sigwait().
+    b. Можно ли установить обработчики сигнала для каждого потока?
+
+
+
+a. Напишите программу с тремя потоками, такими что: первый поток блокирует
+    получения всех сигналов, второй принимает сигнал SIGINT при помощи
+    обработчика сигнала, а третий - сигнал SIGQUIT при помощи функции
+    sigwait().
+
+    в терминале выполняю:
+        cd a
+        gcc signal_threads.c -o thread && ./thread
+    вывод ("Ctrl+C" - сообщение от обработчика SIGINT в потоке 2; "Ctrl+\" - сообщение от sigwait в потоке 3):
+        [1 - blocker] all signals blocked in this thread
+        [2 - sigint handler] SIGINT handler installed
+        [3 - waiter] waiting for SIGQUIT via sigwait
+        ^C[2 - sigint handler] caught SIGINT (2) in signal handler
+        ^\[3 - waiter] sigwait received signal 3 (SIGQUIT)
+
+    sigemptyset
+        int sigemptyset(sigset_t *set);
+            *set - указатель на объект sigset_t, который требуется проинициализировать.
+
+        инициализирует набор сигналов, указанный в set, и "очищает" его от всех сигналов.
+        По факту мы инициализируем маску без сигналов.
+
+        https://www.opennet.ru/man.shtml?topic=sigemptyset&category=3&russian=0
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fs%2Fsigemptyset.html
+
+    sigaddset
+        int sigaddset(sigset_t *set, int signum);
+            *set - указатель на набор сигналов в виде объекта sigset_t, в который требуется добавить сигнал.
+            *signum - сигнал, который требуется добавить в маску. 
+        
+        добавляет сигналы signum в маску set.
+
+        https://www.opennet.ru/man.shtml?topic=sigemptyset&category=3&russian=0
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fs%2Fsigemptyset.html
+
+    pthread_sigmask
+        int pthread_sigmask( int how, const sigset_t *set, sigset_t *oset);
+            how - способ изменения маски сигналов потока:
+                1) SIG_BLOCK - сделать результирующую маску сигналов объединением текущей маски сигнала и 
+                    набора сигналов set.
+                2) SIG_UNBLOCK - сделать результирующую маску сигналов пересечением текущей маски сигнала и 
+                    дополнения набора сигналов set.
+                3) SIG_SETMASK - сделать результирующую маску сигналов равной набору сигналов set.
+            *set - указатель на объект sigset_t, определяющий сигналы, на которые требуется повлиять в маске.
+            *oset - указатель на объект sigset_t, в который возвращается старая маска сигналов потока.
+
+        изменяет маску сигналов вызывающего потока. Если set != NULL, маска сигналов потока устанавливается в set. 
+            Если oset != NULL, в oset возвращается старая маска сигналов потока.
+
+        в моем случае: 
+            pthread_sigmask(SIG_BLOCK, &set, NULL);
+        
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fs%2Fsigemptyset.html
+        https://www.opennet.ru/man.shtml?topic=pthread_sigmask&category=3&russian=5
+
+    pthread_create
+        int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void*), void *arg);
+            *thread - указатель на объект pthread_t, который инициализируется.
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t. Если атрибуты не нужны, можно передать NULL.
+            *start_routine - указатель на функцию, которая запускается в потоке. Подобная функция должна принимать в качестве параметра 
+                указатель void*, вместо которого можно передать указатель на любой объект. Однако допускается только один аргумент. 
+                Соответственно если надо передать несколько значений, то можно оформить их в массив или структуру.
+            *arg: указатель void*, через который передается значение в запускаемую функцию.
+        
+        создает новый поток, с атрибутами, заданными в attr, и запускает в нем функцию start_routine с аргументом arg.
+
+        в моем случае: 
+            err = pthread_create(&tid, NULL, mythread, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_create.html
+        https://metanit.com/c/tutorial/11.1.php
+
+    pthread_join
+        int pthread_join(pthread_t thread, void **value_ptr);
+            thread - идентификатор потока, который должен завершиться.
+            *value_ptr - указатель на переменную, в которую будет записан результат выполнения потока.
+
+        переводит текущий поток (объект pthread_t) в состояние ожидания, пока не завершится другой поток. 
+
+        в моем случае: 
+            pthread_join(tid, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_join.html
+
+    sigfillset
+        int sigfillset(sigset_t *set);
+            *set - указатель на объект sigset_t, который требуется проинициализировать.
+
+        инициализирует маску set, заполняет ее всеми сигналами.
+
+        https://www.opennet.ru/man.shtml?topic=sigemptyset&category=3&russian=0
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fs%2Fsigemptyset.html
+
+    pause
+        int pause(void);
+
+        После этой функции вызывающий поток приостанавливается до тех пор, пока не получит сигнал. 
+            Данный сигнал либо остановит поток, либо заставит его вызвать функцию обработки этого сигнала.  
+            ! Однако поскольку мы заблокировали все сигналы, никакой сигнал не сможет прервать pause().
+            Поэтому поток зависает навсегда.
+
+        https://www.opennet.ru/man.shtml?topic=pause&category=2&russian=0
+
+    sigaction
+        int sigaction(int sig, const struct sigaction *act, struct sigaction *oact);
+            sig - номер сигнала, который требуется обработать.
+            *act - NULL или указатель на struct sigaction, который указывает, как требуется изменить действие для данного сигнала.
+            *oact - NULL или указатель на struct sigaction, в который функция запишет старое действие для данного сигнала.
+
+        Если act != NULL, то указанный сигнал sig принимает новое действие, указанное в act. Если oact != NULL, то 
+            предыдущее действие записывается в oact.
+
+    sigwait
+        int sigwait( const sigset_t *set, int *sig );
+            *set - указатель на набор сигналов в виде объекта sigset_t, который определяет ожидаемые сигналы.
+            *sig - указатель на переменную, в которую будет записан номер сигнала.
+
+        определяет перечень ожидаемых сигналов set, автоматически очищает его из набора ожидающих сигналов 
+            процесса и возвращает его номер в sig.
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fs%2Fsigemptyset.html 
+
+    ? в чем разница между обработкой сигналов в потоке handler_thread и waiter_thread?
+    -   handler_thread: sigaction + pause: я регистрирую обработчик для сигнала SIGINT через sigaction. 
+            Как только в процесс приходит SIGINT (Ctrl+C), pause() прервется и вызывается обработчик sigint_handler.
+
+        waiter_thread: sigwait: в main блокировал SIGQUIT для всех потоков. Ядро, увидев SIGQUIT, просто помещает его в 
+            очередь сигналов процесса и не пробрасывает дальше, пока кто‑то не снимет блокировку. 
+            Это делает sigwait() - снимет блокировку, заберет сигнал из очереди и через sig сообщит номер 
+                пойманного сигнала.
+
+        Итого: в handler_thread сигналы принимаются асинхронно, так как неясно какой поток получит сигнал SIGINT. 
+            В waiter_thread только тот поток, который делает sigwait обработает сигнал SIGQUIT.
+        
+
+
+b. Можно ли установить обработчики сигнала для каждого потока?
+    
+    Нет, так как sigaction() принимает сигналы так, что неясно, какой поток получит сигнал. 
+        Если нужно, чтобы разные потоки обрабатывали разные сигналы, то нужно  поступить так, 
+        как в 3 потоке у меня:
+            1) в main блокирую ВСЕ интересующие меня сигналы для всех потоков
+            2) в конукретном потоке вызываю sigwait на заданном наборе сигналов set, и именно этот поток 
+                синхронно получает и обрабатывает эти сигналы из набора.
+    Обработчики едины для всего процесса, а маски сигналов и sigwait позволяет разделить сигналы на разные потоки.
+

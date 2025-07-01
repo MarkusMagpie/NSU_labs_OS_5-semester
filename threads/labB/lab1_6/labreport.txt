@@ -1,0 +1,216 @@
+1.6. Разработать собственную функцию для создания ядерных потоков - аналог
+    pthread_create():
+    int mythread_create(mythread_t thread, void *(start_routine), void *arg);
+    Функция должна возвращать успех-неуспех.
+    Оформите реализацию в виде библиотеки.
+
+
+
+    в терминале выполняю: 
+        gcc -shared -o libmythread.so mythread.c
+        gcc -o test test.c -L. -lmythread
+        export LD_LIBRARY_PATH="$PWD:$LD_LIBRARY_PATH"
+        ./test
+    вывод:
+        [main] [PID: 9286, PPID: 4656, TID: 9286] - hello from main!
+        [func] [PID: 9286, PPID: 4656, TID: 9287] - hello everynan, I'm from custom thread!
+
+    pthread_create
+        int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void*), void *arg);
+            *thread - указатель на объект pthread_t, который инициализируется.
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t. Если атрибуты не нужны, можно передать NULL.
+            *start_routine - указатель на функцию, которая запускается в потоке. Подобная функция должна принимать в качестве параметра 
+                указатель void*, вместо которого можно передать указатель на любой объект. Однако допускается только один аргумент. 
+                Соответственно если надо передать несколько значений, то можно оформить их в массив или структуру.
+            *arg: указатель void*, через который передается значение в запускаемую функцию.
+        
+        создает новый поток, с атрибутами, заданными в attr, и запускает в нем функцию start_routine с аргументом arg.
+
+        в моем случае: 
+            err = pthread_create(&tid, NULL, mythread, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_create.html
+        https://metanit.com/c/tutorial/11.1.php
+
+    pthread_join
+        int pthread_join(pthread_t thread, void **value_ptr);
+            thread - идентификатор потока, который должен завершиться.
+            *value_ptr - указатель на переменную, в которую будет записан результат выполнения потока.
+
+        переводит текущий поток (объект pthread_t) в состояние ожидания, пока не завершится другой поток. 
+
+        в моем случае: 
+            pthread_join(tid, NULL);
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_join.html
+
+    pthread_cancel
+        int pthread_cancel(pthread_t thread);
+            thread - идентификатор потока, чье выполнение необходимо прервать. Он может быть получен с помощью 
+                pthread_create() или pthread_self().
+
+        Запросить прерывание выполнения потока (используя точки остановки).
+        Если по простому, то pthread_cancel() отмечает поток, который указан у него параметром для отмены.
+            Это значит что когда этот поток дойдет до точки отмены, то он будет прерван.
+
+        в моем случае: 
+            pthread_cancel(tid)
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_cancel.html
+        https://man7.org/linux/man-pages/man3/pthread_cancel.3.html
+
+    описание логики библиотеки:
+        mythread.h 
+            typedef mythread_struct_t* mythread_t;
+            mythread_t работает так же, как в POSIX‑threads pthread_t - это просто указатель на внутреннюю структуру.
+                С его помощью я непрямо управляю потоком. 
+                Например: 
+                    1) вызывая mythread_cancel(tid) я помечаю поле canceled=1 в mythread_struct_t.
+                    2) mythread_join(tid, &retval) - дожидаюсь флага finished=1, забираю retval и ставлю joined=1, 
+                        после чего поток может спокойно завершиться.
+        mythread.c
+            mythread_create(mythread_t *thread, void *(*start_routine)(void *), void *arg)
+                создание нового потока с аттрибутами , заданными в arg состоит из двух этапов:
+                    1) выделить стек для нового потока
+                    2) вызвать clone(), который выполняет thread_startup() в котором уже будет запускаться start_routine()
+
+            сначала я выделяю место на куче для состояния потока, инициализирую все поля нулями с помощью memset():
+                mythread_struct_t *ts = malloc(sizeof(*ts));
+                if (!ts) { 
+                    printf("malloc() failed\n");
+                    return -1; 
+                }
+                memset(ts, 0, sizeof(*ts));
+                ts->start_routine = start_routine;
+                ts->arg = arg;
+            так как потоки не используют общий стек, нужно для каждого потока создавать свой:
+                void *stack = malloc(MYTHREAD_STACK_SIZE);
+                if (!stack) {
+                    free(ts);
+                    printf("malloc() failed\n");
+                    return -1;
+                }
+            для clone() нужно указать адрес нижней вершины стека: 
+                void *stack_top = (char*)stack + MYTHREAD_STACK_SIZE;
+            также для потока нужно установить ряд флагов:
+                int flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD | CLONE_IO;
+                1) CLONE_VM - вызывающий процесс и процесс-потомок запускаются в одном 
+                    адресном пространстве: общие кучи, стеки, данные. Значит все изменения в адресном 
+                    пространстве видны обоим процессам.
+                2) CLONE_FS - вызывающий процесс и процесс-потомок разделяют информацию о ФС. Она включает: 
+                    корневой каталог ФС, текущий рабочий каталог и значение umask. Любые вызовы chroot(2), 
+                    chdir(2), или umask(2) выполняемые вызывающим процессом или процессом-потомком дают 
+                    взаимный эффект.
+                3) CLONE_FILES - вызывающий процесс и процесс-потомок имеют общую таблицу fd. То есть 
+                    если один процесс делает open(), то fd открыт и для второго процесса.
+                4) CLONE_SIGHAND - вызывающий процесс и процесс-потомок разделяют одну и ту же таблицу обработчиков сигналов. 
+                    Если вызывающий процесс или процесс-потомок вызывают sigaction(2) для изменения поведения при получении 
+                    сигнала, то это поведение изменяется также и в другом процессе. 
+                    ! Однако, вызывающий процесс и процесс-потомок имеют различные маски сигналов и списки ожидающих обработки 
+                    сигналов. Так, один из них может блокировать или деблокировать некоторые сигналы, используя sigprocmask(2) 
+                    и это не будет оказывать эффект на другой процесс.
+                5) CLONE_THREAD - флаг превращает созданный clone()-ом отдельный процесс в поток одного процесса.
+                    Все потоки с CLONE_THREAD считаются частью одного процесса с одним PID, но у каждого своя TID.
+                    Доказательство этого видим при выводе программы:
+                        [main] [PID: 15684, PPID: 4656, TID: 15684]
+                        [func] [PID: 15684, PPID: 4656, TID: 15685]
+                6) CLONE_IO - общие очереди ввода‑вывода (I/O context). If processes share the same I/O context,
+                    they are treated as one by the I/O scheduler.  As a
+                    consequence, they get to share disk time.
+                Подробно читаю про флаги здесь: https://www.opennet.ru/cgi-bin/opennet/man.cgi?topic=clone&category=2
+                И здесь: https://man7.org/linux/man-pages/man2/clone.2.html
+            вызов clone() - создается новый процесс:
+                pid_t tid = clone(thread_startup, stack_top, flags, ts);
+                if (tid == -1) {
+                    free(stack);
+                    free(ts);
+                    printf("clone() failed\n");
+                    return -1;
+                }
+            созраняю дескриптор - возвращаю указатель ts: с ним можно вызывать mythread_join() и mythread_cancel():
+                *thread = ts;
+
+            clone
+                int clone(int (*fn)(void *), void *child_stack, int flags, void *arg);
+                    создаёт новый процесс как и fork(2). В отличие от fork(2), позволяет процессу-ребенку 
+                        разделять части их контекста выполнения с процессом-родителем: такие как область 
+                        памяти, таблицу файловых дескрипторов и таблицу обработчиков сигналов. 
+
+                https://www.opennet.ru/cgi-bin/opennet/man.cgi?topic=clone&category=2
+
+                ! clone() vs fork() 
+                    1 кастомная точка входа дочернего процесса - fn с аргументом arg.
+                        Новый процесс начинает исполнение именно с функции fn, а не с 
+                            точки системного вызова, как при fork()
+                    2 указываю кастомную область памяти под стек ребенка - child_stack
+                    3 когда fn(arg) завершится (возвратит управление), дочерний процесс 
+                        завершится с кодом возврата, равным возвращённому значению fn, 
+                        либо может завершить работу явно через exit() или после 
+                        фатального сигнала.
+                        (у fork() сигнал возвращения - всегда SIGCHLD)
+
+                    подробнее здесь: https://stackoverflow.com/questions/4856255/the-difference-between-fork-vfork-exec-and-clone
+
+            memset
+                void *memset(void *s, int c, size_t n);
+                    s - указатель на блок памяти для заполнения
+                    c - блок памяти будет заполнен значением c
+                    n - количество байтов, которые нужно заполнить
+
+                Функция memset() заполняет первые n байтов той области памяти, на которую указывает s, постоянным байтом c.  
+
+                https://www.opennet.ru/man.shtml?topic=memset&category=3&russian=0
+
+            static int thread_startup(void *arg) 
+                это точка входа, с которой начинает свою работу каждый новый поток, созданный через clone().
+
+                перевожу arg(тот самый ts, что передал в clone) к указателю на нашу структуру с состоянием потока:
+                    mythread_struct_t *ts = (mythread_struct_t *)arg;
+                getcontext сохраняет в ts->before_start_routine весь текущий процессорный контекст: регистры, 
+                    указатель стека, маску сигналов:
+                    if (getcontext(&ts->before_start_routine) == -1) {
+                        _exit(1);
+                    }
+                проверяю флаг canceled - если не был отменен, то запускаю start_routine() и сохраняю возвращенный 
+                    указатель в retval:
+                    if (!ts->canceled) {
+                        ts->retval = ts->start_routine(ts->arg);
+                    }
+                далее просто устанавливаю флаг finished, сигнализирующий о завершении работы потока:
+                    ts->finished = 1;
+                поток не выходит сразу, а остаётся живым до тех пор, пока вызывающий код не выполнит mythread_join():
+                    while (!ts->joined) {
+                        sleep(1);
+                    }
+                Функция завершается, а так как поток создан через clone() в общей виртуальной памяти, то он просто 
+                    возвращает управление и умирает, освободив при этом все свои ресурсы.
+
+                _exit()
+                    вызывает немедленное нормальное завершение программы, НО не вызываем пользовательские функции очистки,
+                        буфферизованные данные остаются в текущем состоянии - к ним не применяется fflush() для очистки
+                    https://www.c-cpp.ru/content/exit-exit
+
+            mythread_join(mythread_t thread, void **retval) 
+                ожидаем завершение потока и извлекаем его return value.
+
+                унаследовали typedef mythread_t = mythread_struct_t*, так что сам параметр thread уже является указателем 
+                    на нашу внутреннюю структуру состояния:
+                    mythread_struct_t *ts = thread;
+                ждем когда поток пометит себя как завершенный. После того, как поток выполнит свою работу, finished 
+                    станет 1 и цикл оборвётся:
+                    while (!ts->finished) {
+                        sleep(1);
+                    }
+                если start_routine вернула непустой указатель, то он будет сохранен в ts->retval:
+                    if (retval) *retval = ts->retval;
+                далее просто устанавливаю флаг joined:
+                    ts->joined = 1;
+
+            mythread_cancel(mythread_t thread)
+                утсановка флага отложенной отмены потока ДО того, как он запустит пользовательскую функцию через thread_startup().
+
+                унаследовали typedef mythread_t = mythread_struct_t*, так что сам параметр thread уже является указателем 
+                    на нашу внутреннюю структуру состояния:
+                    mythread_struct_t *ts = thread;
+                далее просто устанавливаю флаг canceled:
+                    ts->canceled = 1;

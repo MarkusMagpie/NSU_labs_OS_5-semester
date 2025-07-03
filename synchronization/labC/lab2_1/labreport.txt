@@ -1,0 +1,425 @@
+2.1. Проблема конкурентного доступа к разделяемому ресурсу.
+    a. В каталоге sync репозитория git@github.com:mrutman/os.git вы найдете простую
+        реализацию очереди на списке. Изучите код, соберите и запустите программу
+        queue-example.c. Посмотрите вывод программы и убедитесь что он
+        соответствует вашему пониманию работы данной реализации очереди.
+        Добавьте реализацию функции queue_destroy().
+    b. Изучите код программы queue-threads.c и разберитесь что она делает. Соберите
+        программу.
+            i. Запустите программу несколько раз. Если появляются ошибки
+                выполнения, попытайтесь их объяснить и определить что именно
+                вызывает ошибку. Какие именно ошибки вы наблюдали?
+            ii. Поиграйте следующими параметрами:
+                1. размером очереди (задается в queue_init()). Запустите программу
+                    с размером очереди от 1000 до 1000000.
+                2. привязкой к процессору (задается функцией set_cpu()). Привяжите
+                    потоки к одному процессору (ядру) и к разным.
+                3. планированием потоков (функция sched_yield()). Попробуйте
+                    убрать эту функцию перед созданием второго потока.
+                4. Объясните наблюдаемые результаты.
+
+
+
+a. В каталоге sync репозитория git@github.com:mrutman/os.git вы найдете простую
+    реализацию очереди на списке. Изучите код, соберите и запустите программу
+    queue-example.c. Посмотрите вывод программы и убедитесь что он
+    соответствует вашему пониманию работы данной реализации очереди.
+    Добавьте реализацию функции queue_destroy().
+
+    в терминале выполняю (HTTPS-ссылка): 
+        git clone https://github.com/mrutman/os.git
+        cd os/sync
+        gcc queue-example.c queue.c -o sync && ./sync
+    СЕЙЧАС ВЫПОЛНЯЮ ПРОГРАММУ ТАК:
+        cd a
+        gcc queue-example.c queue.c -o sync && ./sync
+    вывод: 
+        main: [9294 5972 9294]
+        ok 1: add value 0
+        queue stats: current size 1; attempts: (1 0 1); counts (1 0 1)
+        ok 1: add value 1
+        queue stats: current size 2; attempts: (2 0 2); counts (2 0 2)
+        ok 1: add value 2
+        queue stats: current size 3; attempts: (3 0 3); counts (3 0 3)
+        ok 1: add value 3
+        queue stats: current size 4; attempts: (4 0 4); counts (4 0 4)
+        ok 1: add value 4
+        queue stats: current size 5; attempts: (5 0 5); counts (5 0 5)
+        ok 1: add value 5
+        queue stats: current size 6; attempts: (6 0 6); counts (6 0 6)
+        ok 1: add value 6
+        queue stats: current size 7; attempts: (7 0 7); counts (7 0 7)
+        ok 1: add value 7
+        queue stats: current size 8; attempts: (8 0 8); counts (8 0 8)
+        ok 1: add value 8
+        queue stats: current size 9; attempts: (9 0 9); counts (9 0 9)
+        ok 1: add value 9
+        queue stats: current size 10; attempts: (10 0 10); counts (10 0 10)
+        ok: 1: get value 0
+        queue stats: current size 9; attempts: (10 1 9); counts (10 1 9)
+        ok: 1: get value 1
+        queue stats: current size 8; attempts: (10 2 8); counts (10 2 8)
+        ok: 1: get value 2
+        queue stats: current size 7; attempts: (10 3 7); counts (10 3 7)
+        ok: 1: get value 3
+        queue stats: current size 6; attempts: (10 4 6); counts (10 4 6)
+        ok: 1: get value 4
+        queue stats: current size 5; attempts: (10 5 5); counts (10 5 5)
+        ok: 1: get value 5
+        queue stats: current size 4; attempts: (10 6 4); counts (10 6 4)
+        ok: 1: get value 6
+        queue stats: current size 3; attempts: (10 7 3); counts (10 7 3)
+        ok: 1: get value 7
+        queue stats: current size 2; attempts: (10 8 2); counts (10 8 2)
+        ok: 1: get value 8
+        queue stats: current size 1; attempts: (10 9 1); counts (10 9 1)
+        ok: 1: get value 9
+        queue stats: current size 0; attempts: (10 10 0); counts (10 10 0)
+        ok: 0: get value -1
+        queue stats: current size 0; attempts: (10 11 -1); counts (10 10 0)
+        ok: 0: get value -1
+        queue stats: current size 0; attempts: (10 12 -2); counts (10 10 0)
+
+    описание логики:
+        queue-example.c
+            инициализировали очередь с максимальным размером 1000.
+            в цикле от 0 до 9 добавляем узлы в очередь, значения узлов от 0 до 9. Вывожу результат добавления узлов: 0 - не удалось, 
+                1 - удалось. После каждой попытки добавления вывожу статистику queue_print_stats().
+            в цикле от 0 до 11 вытягиваем узлы из очереди, значения узлов от 0 до 11. Вывожу результат добавления узлов: 0 - не удалось, 
+                1 - удалось. После каждой попытки вытягивания вывожу статистику queue_print_stats().
+            освобождаю ресурсы ранее инициализированной в queue_init() очереди q. 
+            
+        queue.c
+            void *qmonitor(void *arg)
+                функция вспомогательного потока для мониторинга, который запускается в queue_init(). Он в фоновом режиме периодически 
+                    выводит статистику по очереди.
+                
+                arg - указатель на структуру queue_t. Приводим его обратно к нужному типу:
+                    queue_t *q = (queue_t *)arg;
+                выводим id процесса, родительского процесса и потока:
+                    printf("qmonitor: [%d %d %d]\n", getpid(), getppid(), gettid());
+                в бесконечном цикле каждую секунду вывожу текщее состояние очереди с помощью queue_print_stats():               
+                    while (1) {
+                        queue_print_stats(q);
+                        sleep(1);
+                    }
+                Тело цикла бесконечно, qmonitor останавливается только через pthread_cancel(). Строка return NULL недостижима:
+                    return NULL;
+
+            queue_t* queue_init(int max_count)
+                функция создаёт и возвращает указатель на новую очередь queue_t. Параметр max_count это максимальный размер числа 
+                    элементов, которое может вместить в новую очередь.
+                
+                выделяю память под структуру queue_t. Если malloc() вернет NULL, то печатаю сообщение об ошибке и завершаю программу abort().               
+                    queue_t *q = malloc(sizeof(queue_t));
+                    if (!q) {
+                        printf("Cannot allocate memory for a queue\n");
+                        abort();
+                    }
+                инициализируем поля структуры queue_t:
+                    first и last - голова и хвост списка - пока они NULL, значит очередь пуста.
+                    max_count - аргумент функции, чтобы знать когда прекращать добавлять элементы.
+                    count - текущее количество элементов в queue_t:               
+                    q->first = NULL;
+                    q->last = NULL;
+                    q->max_count = max_count;
+                    q->count = 0;
+                всю статистику сбрасываю:
+                    add_attempts - сколько раз пытались добавлять в очередь.
+                    get_attempts - сколько раз пытались извлекать из очереди.
+                    add_count - сколько раз реально добавлено элементов.
+                    get_count - сколько раз реально извлечено элементов:
+                    q->add_attempts = q->get_attempts = 0;
+	                q->add_count = q->get_count = 0;
+                запускаем фоновый поток для мониторинга очереди.
+                    pthread_create() создаёт поток, который выполняет функцию qmonitor(q).
+                    &q->qmonitor_tid хранит идентификатор потока, чтобы можно было отменить и join()‑ить этот поток:
+                    err = pthread_create(&q->qmonitor_tid, NULL, qmonitor, q);
+                    if (err) {
+                        printf("queue_init: pthread_create() failed: %s\n", strerror(err));
+                        abort();
+                    }
+                возвращаю указатель на новосозданную очередь:
+                    return q;
+
+            void queue_destroy(queue_t *q)
+                функция освобождает ресурсы ранее инициализированной в queue_init() очереди q. 
+
+                pthread_cancel + pthread_join - в queue_init создали поток monitor, который бесконечно печатал статистику. 
+                    Чтобы его остановить, посылаем ему запрос на отмену pthread_cancel() и дожидаемся завершения через pthread_join():
+                    pthread_cancel(q->qmonitor_tid);
+                    pthread_join (q->qmonitor_tid, NULL);
+                цикл проходит по всем элементам q от first до конца, запоминая next перед тем как free(cur):
+                    qnode_t *cur = q->first;
+                    while (cur) {
+                        qnode_t *next = cur->next;
+                        free(cur);
+                        cur = next;
+                    }
+                как список пуст, освобождаем память, выделенную под саму структуру queue_t:
+                    free(q);
+
+            int queue_add(queue_t *q, int val)
+                функция пытаеется поместить новый элемент в конец очереди q и заодно обновляет статистику из структуры.
+
+                увеличиваю счетчик попыток добавления элемента на 1 - фиксирую факт вызова queue_add(), даже если самого добавления не произойдет:
+                    q->add_attempts++;
+                assert()-ом убеждаемся, что текущее число элементов count никогда не превышает максимально разрешённого max_count:
+                    assert(q->count <= q->max_count);
+                если очередь уже полна, то возвращаю 0. В выводе queue-example.c видим что ok 1 если добавление прошло успешно, а 0 если не прошло:
+                    if (q->count == q->max_count)
+		                return 0;
+                выделяю память для нового узла очереди q:               
+                    qnode_t *new = malloc(sizeof(qnode_t));
+                    if (!new) {
+                        printf("Cannot allocate memory for new node\n");
+                        abort();
+                    }
+                инициализируем поля структуры qnode_t:
+                    в поле val значение, которое нужно положить в очередь.
+                    next = NULL, так как это будет последний элемент:
+                    new->val = val;
+	                new->next = NULL;
+                если очередь пуста first==NULL, то и first и last указывают на новый узел.
+                    если нет, то добавляем узел за текущим хвостом (q->last), смещаю сам хвост:                
+                    if (!q->first)
+                        q->first = q->last = new;
+                    else {
+                        q->last->next = new;
+                        q->last = q->last->next;
+                    }
+                обновляю статистику всей очереди q: инкременируется размер очереди count и счетчик успешных добавлений add_count:
+                    q->count++;
+	                q->add_count++;
+                возвращение 1  - успешное помещение узла в очередь q:
+                    return 1;
+            
+            int queue_get(queue_t *q, int *val)
+                попытка извлечь элемент из головы очереди и вернуть его значение, обновляя при этом статистику очереди q.
+
+                увеличиваю счетчик попыток извлечения элемента на 1 - фиксирую факт вызова queue_get(), даже если самого извлечения не произойдет:
+                    q->get_attempts++;
+                assert()-ом убеждаемся, что текущее число элементов count никогда не отрицательно:
+                    assert(q->count >= 0);
+                если очередь пуста, то возвращаю 0. В выводе queue-example.c видим что ok 1 если извлечение прошло успешно, а 0 если не прошло:
+                    if (q->count == 0)
+		                return 0;
+                узел tmp указывает на головной элемент списка:
+                    qnode_t *tmp = q->first;
+                разыменовываю и записываю в *val то число, что лежало в узле tmp:
+                    *val = tmp->val;
+                переподвешиваю голову очереди на следующий узел:
+	                q->first = q->first->next;
+                удаляю старую голову из queue_t:               
+                    free(tmp);
+                обновляю статистику очереди q: уменьшается размер очереди count и увеличиваю счетчик успешных извлечений get_count:
+                    q->count--;
+                    q->get_count++;
+                возвращение 1  - успешное извлечение узла из очереди q:
+                    return 1;
+
+            void queue_print_stats(queue_t *q)
+                функция выводит в консоль текущую статистику работы очереди q.
+                пример вывода: 
+                    queue stats: current size 5; attempts: (5 0 5); counts (5 0 5)
+                        сейчас 5 элементов в очереди.
+                        5 раз пробовали добавть узел в очередь, 0 раз пробовали взять, разность 5.
+                        5 раз добавлено, 0 раз взято, разность 5.
+
+
+
+b. Изучите код программы queue-threads.c и разберитесь что она делает. Соберите
+    программу.
+        i. Запустите программу несколько раз. Если появляются ошибки
+            выполнения, попытайтесь их объяснить и определить что именно
+            вызывает ошибку. Какие именно ошибки вы наблюдали?
+
+    в теримнале выполняю: 
+        gcc queue-threads.c queue.c -o sync && ./sync
+    вывод:
+        main [18408 5972 18408]
+        qmonitor: [18408 5972 18409]
+        queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+        reader [18408 5972 18410]
+        writer [18408 5972 18411]
+        set_cpu: set cpu 1
+        set_cpu: set cpu 1
+        ERROR: get value is 1192747 but expected - 1192746
+        Segmentation fault (core dumped)
+
+    описание логики:
+        queue-threads.c
+            void set_cpu(int n)
+                закрепляет вызывающий поток за конкретным ядром процессора номер n.
+
+                обнуляем все биты в структуре cpu_set_t, чтобы изначально ни одно ядро не было выбрано:
+                    CPU_ZERO(&cpuset);
+                устанавливаем бит в структуре cpu_set_t, соответствующий ядру процессора номер n. 
+                    Теперь cpuset значит - разрешено только это одно ядро: 
+                    CPU_SET(n, &cpuset);
+                вешаем маску cpuset на поток tid - ОС будет планировать этот поток только на ядре n:
+                    err = pthread_setaffinity_np(tid, sizeof(cpu_set_t), &cpuset);
+                    if (err) {
+                        printf("set_cpu: pthread_setaffinity failed for cpu %d\n", n);
+                        return;
+                    }
+
+            void *reader(void *arg)
+                поток вытягивает числа из общей очереди и проверяет, что они идут подряд без пропусков.
+
+                привязываем поток к общему с потоком-читателем ядру 1:
+                    set_cpu(1);
+                в бесконечном цикле пытаемся извлечь элемент из очереди через queue_get(q, &val), 
+                    если очередь окажется пуста (ok == 0), сразу продолжаем цикл без проверки. 
+                    Если полученное число val не совпало с тем, которое мы ожидали (expected), то 
+                    выводим сообщение об ошибке красным фоном. Изменяю ожидаемое число на 1
+                    while (1) {
+                        int val = -1;
+                        int ok = queue_get(q, &val);
+                        if (!ok)
+                            continue;
+
+                        if (expected != val)
+                            printf(RED"ERROR: get value is %d but expected - %d" NOCOLOR "\n", val, expected);
+
+                        expected = val + 1;
+                    }
+                тело цикла бесконечно.Строка return NULL недостижима:
+                    return NULL;
+
+            void *writer(void *arg)
+
+            int main()
+                инициализация очереди с максимальным числом элементов 1000000 - порождаем фоновый мониторинговый поток, 
+                    который будет печатать статистику каждую секунду:
+                    q = queue_init(1000000);
+                создаем поток reader(), передаем ему указатель на очередь q:
+                    err = pthread_create(&tid, NULL, reader, q);
+                    if (err) {
+                        printf("main: pthread_create() failed: %s\n", strerror(err));
+                        return -1;
+                    }
+                перенос main потока в конец очереди потоков с одинаковым статическим приоритетом, чтобы дать reader()-у шанс 
+                    сразу начать работать до того, как вы создадите writer()-a:
+                    sched_yield();
+                создаём второй поток writer(), который в бесконечном цикле добавляет в очередь возрастающие целые:
+                    err = pthread_create(&tid, NULL, writer, q);
+                    if (err) {
+                        printf("main: pthread_create() failed: %s\n", strerror(err));
+                        return -1;
+                    }
+                pthread_exit не завершает весь процесс, а лишь текущий main поток, а остальные 3 - читатель, писатель и монитор 
+                    продолжают работу:
+                    pthread_exit(NULL);
+            -----------------------------------------------------------------------------------------------------------------------------------
+            pthread_create()
+                pthread_create
+                int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void*), void *arg);
+                    *thread - указатель на объект pthread_t, который инициализируется.
+                    *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t. Если атрибуты не нужны, можно передать NULL.
+                    *start_routine - указатель на функцию, которая запускается в потоке. Подобная функция должна принимать в качестве параметра 
+                        указатель void*, вместо которого можно передать указатель на любой объект. Однако допускается только один аргумент. 
+                        Соответственно если надо передать несколько значений, то можно оформить их в массив или структуру.
+                    *arg: указатель void*, через который передается значение в запускаемую функцию.
+                
+                создает новый поток, с атрибутами, заданными в attr, и запускает в нем функцию start_routine с аргументом arg.
+
+                в моем случае: 
+                    err = pthread_create(&tid, NULL, mythread, NULL);
+
+                https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_create.html
+                https://metanit.com/c/tutorial/11.1.php
+            
+            sched_yield()
+                int sched_yield( void );
+
+                Процесс может освободить процессор без блокировки, вызвав sched_yield. Процесс будет перемещен в конец очереди процессов 
+                    с одинаковым статическим приоритетом, и управление будет передано другому процессу. 
+                ! если текущий процесс является единственным в очереди процессов с тем же приоритетом, то он продолжит работу сразу 
+                    после вызова функции sched_yield.
+
+                в моем случае:
+                    sched_yield();
+
+                https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fs%2Fsched_yield.html
+                https://www.opennet.ru/man.shtml?topic=sched_yield&category=2&russian=0
+
+            pthread_exit()
+                void pthread_exit( void *value_ptr );
+                    value_ptr - указатель на переменную, чье значение будет возвращено потоку, ожидающему завершения текущего с 
+                        помощью pthread_join().
+                
+                терминирует вызвавший поток. Если поток является joinable, то значение value_ptr становится доступным потоку, 
+                    вызвавшему pthread_join(), в качестве статуса завершения. Если поток не joinable (в состоянии detached), 
+                    то все системные ресурсы, занятые потоком, немедленно освобождаются.
+                
+                в моем случае:
+                    pthread_exit(NULL);
+
+                https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_exit.html
+                exit vs join vs detach: https://stackoverflow.com/questions/22427007/difference-between-pthread-exit-pthread-join-and-pthread-detach
+
+            pthread_self()
+                pthread_self
+                pthread_t pthread_self(void);
+                
+                returns the ID of the calling thread. This is the same value that is returned in *thread in 
+                    the pthread_create(3) call that created this thread. 
+
+                в моем случае:
+                    pthread_t self = pthread_self();
+
+                https://www.opennet.ru/man.shtml?topic=pthread_self&category=3&russian=2
+            
+            pthread_setaffinity_np()
+                int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize, const cpu_set_t *cpuset);
+                    thread - идентификатор потока, для которого устанавливается маска.
+                    cpusetsize - размер области, в которой хранится объект cpu_set_t.
+                    cpuset - указатель на структуру cpu_set_t, внутри отметили номера ядер, на которых поток может выполняться.
+
+                прикрепляем указанный поток thread к тем CPU, которые перечислены в маске cpuset.
+                ! если поток не запущен ни на одном из указанных CPU, то он перемещается в один из них.
+
+                в моем случае:
+                    err = pthread_setaffinity_np(tid, sizeof(cpu_set_t), &cpuset);
+
+                https://man.archlinux.org/man/pthread_setaffinity_np.3.ru
+                https://man7.org/linux/man-pages/man3/pthread_setaffinity_np.3.html
+
+    ? Если появляются ошибки выполнения, попытайтесь их объяснить и определить что именно вызывает ошибку. Какие именно ошибки вы наблюдали?
+    - queue_add() и queue_get() взаимодействуют с общей очередью queue_t без объектов синхронизации. 
+        reader() может одновременно читать q->first в тот момент, когда writer() меняет q->last->next. То есть указатели будут портиться. 
+        И когда reader() в queue_get() сделает q->first = q->first->next по недействительному указателю + free(tmp) на недействительном адресе,
+        ловим Segmentation fault - попытка доступа к несуществующему узлу.  
+
+
+
+ii. Поиграйте следующими параметрами:
+    1. размером очереди (задается в queue_init()). Запустите программу
+        с размером очереди от 1000 до 1000000.
+    2. привязкой к процессору (задается функцией set_cpu()). Привяжите
+        потоки к одному процессору (ядру) и к разным.
+    3. планированием потоков (функция sched_yield()). Попробуйте
+        убрать эту функцию перед созданием второго потока.
+    4. Объясните наблюдаемые результаты.
+
+    1) при увеличении максимального размера очереди вижу что повышается вероятность Segmentation fault. 
+        Я полагаю что это связано с тем что при вставке нового узла writer() делает:
+            q->last->next = new;
+            q->last = q->last->next;
+        если в этот момент reader() выполняет:
+            q->first = q->first->next;
+            free(tmp);
+        и при этом writer() тратит доп. время на malloc()/присваивания новых значений полям, то повышается вероятность 
+        что указатели first и last->next разойдутся: reader() через free(tmp) может освободить узел, на который writer() 
+        ещё собирался поставит свой хвост, а затем writer() обновит q->last на освобождённый адрес. 
+        При следующей операции с освобожденным указателем ловим Segmentation fault.  
+    
+    2) при работе потоков на двух разных ядрах гораздо быстрее ловлю Segmentation fault. 
+        Полагаю что это связано с тем, что writer() делает действия из 1) одновременно с writer()-ом. А значит проблема, 
+        описанная выше сохраняется.
+        ! без добавления объектов синхронизации - например spinlock-а, сбои я получаю гарантированно, но на двух ядрах быстрее.  
+    
+    3) sched_yield() - подмена main потока в планировщике ОС, дабы дать reader()-у шанс начать работать до того, как появится reader(). 
+        Иначе писатель может стартовать первым и заполнить queue_t большим количеством элементов до того, как reader() вообще начнет работать. 
+        sched_yield() уменьшает разброс элементов очереди.

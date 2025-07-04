@@ -1,0 +1,617 @@
+2.2. Синхронизация доступа к разделяемому ресурсу
+    a. Измените реализацию очереди, добавив спинлок для синхронизации доступа к
+        разделяемым данным.
+    b. Убедитесь, что не возникает ошибок передачи данных через очередь.
+    c. Поиграйте параметрами из пункта 2.1:
+        i. Оцените загрузку процессора.
+        ii. Оцените время проведенное в пользовательском режиме и в режиме
+            ядра.
+        iii. Оцените текущую заполненность очереди, количество попыток
+            чтения-записи и количество прочитанных-записанных данных.
+        iv. Объясните наблюдаемые результаты.
+    d. Часто бывает, что поток, пишущий данные в очередь вынужден ожидать их
+        (например, из сети на select()/poll()). Проэмулируйте эту ситуацию, добавив в
+        поточную функцию писателя периодический вызов usleep(1). Выполните
+        задания из пункта с.
+    e. Измените реализацию очереди, заменив спинлок на мутекс. Проделайте
+        задания из пунктов b, c и d. Сравните со спинлоком.
+    f. Измените реализацию очереди, добавив условную переменную. Проделайте
+        задания из пунктов b, c и d. Сравните со спинлоком и мутексом.
+    g. Используйте для синхронизации доступа к очереди семафоры. Проделайте
+        задания из пунктов b, c и d. Сравните со спинлоком, мутексом и условной
+        переменной.
+
+
+
+a. Измените реализацию очереди, добавив спинлок для синхронизации доступа к
+    разделяемым данным.
+b. Убедитесь, что не возникает ошибок передачи данных через очередь.
+
+    в теримнале выполняю: 
+        gcc queue-threads.c queue.c -o sync && ./sync
+    вывод:
+        бесконечный, нормальный при любом макисмальном количестве узлов процесс
+
+    что добавил: 
+        queue.h
+            typedef struct {
+                atomic_int lock;
+            } spinlock_t;
+
+            typedef struct _Queue {
+                ...
+                spinlock_t lock; 
+                ...
+            }
+
+        queue.c
+            static void spinlock_init(spinlock_t *s) 
+                инициализирует поле lock структуры спинлока в разблокированное состояние. Я использую atomic_init lock 
+                    в качестве флага, где 
+                        1: лок свободен, 
+                        0: лок занят. 
+                    После вызова spinlock_init(), 
+                    любой поток, вызвавший spinlock_lock(), увидит что mylock.lock == 1 и сможет сменить его на 0, 
+                    захватив лок:
+                    atomic_init(&s->lock, 1);
+
+            static void spinlock_lock(spinlock_t *s)
+                пытаемся захватить лок, пока другим потоком он не будет разблокирован. На каждой итерации сравниваем текущее значение
+                    s->lock с 1: 
+                        если они равны, значит лок свободен, теперь s->lock = 0 (заблокировал). Захват лока произведен успешно -> break;
+                        если нет, то какой-то другой поток уже захватил лок. Повторяем попытку в новой итерации:
+                while (1) {
+                    int one = 1;
+                    if (atomic_compare_exchange_strong(&s->lock, &one, 0)) {
+                        break;
+                    }
+                }
+
+            static void spinlock_unlock(spinlock_t *s)
+                освобождение лока, переводя его флаг в разблокированное состояние: 
+                int zero = 0;
+                atomic_compare_exchange_strong(&s->lock, &zero, 1);
+
+        ---------------------------------------------------------------------------------------------------------------------------------------
+        atomic_int
+            тип данных, который, в отличие от простого int, гарантирует атомарность всех операций с ним.
+
+        ? почему используем atomic_int а не int?
+        - чтобы не было гонок между потоками при проверке и установке флага lock. Если бы взяли int, то например два потока 
+            могли бы прочитать лок как 1 и оба записать 0, посчитав, что они захватили лок. Но 2 потока не могут захватывать лок одновременно.
+        
+        atomic_init
+            void atomic_init(volatile atomic_int *object, atomic_int desired)
+                object - указатель на переменную типа atomic_int, которую нужно инициализировать.
+                desired - значение, с которым должна быть инициализирована эта переменная.
+
+            используется для инициализации атомарного объекта. Устанавливает начальное значение атомарной переменной.
+
+            в моем случае: 
+                atomic_init(&s->lock, 1);
+
+        atomic_compare_exchange_strong
+            bool atomic_compare_exchange_strong(volatile atomic_int *object, atomic_int *expected, atomic_int desired)
+                object - указатель на переменную типа atomic_int, которую нужно изменить.
+                expected - указатель на переменную типа atomic_int, содержащую ожидаемое значение.
+                desired - новое значение, которое нужно установить.
+
+            сравнивает текущее значение атомарной переменной object со значением, указанным в expected. Если они равны, то устанавливает 
+                значение desired в object и возвращает trut. В противном случае, оставляет object без изменений и возвращает false.
+
+            в моем случае:
+                if (atomic_compare_exchange_strong(&s->lock, &one, 0)) {
+                    break;
+                }
+            
+            https://spec-zone.ru/cpp/atomic/atomic_compare_exchange
+
+
+
+c. Поиграйте параметрами из пункта 2.1:
+    i. Оцените загрузку процессора.
+    ii. Оцените время проведенное в пользовательском режиме и в режиме
+        ядра.
+    iii. Оцените текущую заполненность очереди, количество попыток
+        чтения-записи и количество прочитанных-записанных данных.
+    iv. Объясните наблюдаемые результаты.
+
+    i. для оценки загрузки процессора используем htop - в отдельном терминале запускаю и показываю следующее:
+        работу потоков процесса sync на одном ядре (у reader() и writer() set_cpu(1);) - в htop вижу что загрузка ядра 1 100%
+        работу потоков процесса sync на двух ядрах (у reader() и writer() set_cpu(1 и 2) соответственно) - загрузка ядер 1 и 2 100%
+
+    ii. для оценки времени компилирую и запускаю с time:
+            gcc queue-threads.c queue.c -o sync && time ./sync
+            
+            на одном ядре вижу примерно одинаковое real и user время работы: 
+                main [22432 4296 22432]
+                qmonitor: [22432 4296 22433]
+                queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+                reader [22432 4296 22434]
+                writer [22432 4296 22435]
+                set_cpu: set cpu 1
+                set_cpu: set cpu 1
+                queue stats: current size 100000; attempts: (17904911 17280112 624799); counts (4009080 3909080 100000)
+                queue stats: current size 100000; attempts: (34557319 35505118 -947799); counts (7592519 7492519 100000)
+                queue stats: current size 0; attempts: (52666334 52964686 -298352); counts (11349572 11349572 0)
+                queue stats: current size 0; attempts: (68224857 71711105 -3486248); counts (15281929 15281929 0)
+                queue stats: current size 0; attempts: (85929200 89077621 -3148421); counts (18741021 18741021 0)
+                queue stats: current size 100000; attempts: (99598339 110323665 -10725326); counts (22002535 21902535 100000)
+                ^C
+                real    0m6,457s
+                user    0m6,439s
+                sys     0m0,003s
+            в то время как на двух ядрах user время аккурат в два раза больше real:
+                main [22769 4296 22769]
+                qmonitor: [22769 4296 22770]
+                queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+                reader [22769 4296 22771]
+                set_cpu: set cpu 1
+                writer [22769 4296 22772]
+                set_cpu: set cpu 2
+                queue stats: current size 0; attempts: (356815 10721205 -10364390); counts (356815 356815 0)
+                queue stats: current size 0; attempts: (822012 21194370 -20372358); counts (822012 822012 0)
+                queue stats: current size 0; attempts: (1220246 31843701 -30623455); counts (1220246 1220246 0)
+                queue stats: current size 0; attempts: (1710253 42277508 -40567255); counts (1710253 1710253 0)
+                queue stats: current size 0; attempts: (2084787 52976020 -50891233); counts (2084787 2084787 0)
+                queue stats: current size 0; attempts: (2571947 63414633 -60842686); counts (2571947 2571947 0)
+                ^C
+                real    0m6,445s
+                user    0m12,887s
+                sys     0m0,001s
+            user - сумма времени, проведённого в user mode всеми потоками, коих активных у меня 2: reader() и writer(), 
+                при этом оба потребляют CPU на 100%, в чем мы убедились в предыдущем пункте.
+            sys в обоих случаях примерно нулевой так как не делаю операций в ядре (раз в секунду sleep(1) у монитора, а 
+                всё остальное - чисто пользовательские операции).
+
+    iii. при работе потоков на двух ядрах вижу что add_count +- = get_count, а при работе потоков на одном ядре они не равны.
+        на одном ядре writer() работает быстрее reader(), поэтому текущий размер очереди count быстро подходит к max_count, 
+            поэтому writer() имеет большое количество add_attempts, но они не превращаются в реальные новые элементы в очереди.
+            Значит writer() чаще освобождает лок спинлока нежели reader(). Поалагаю часто срабатывает это условие: 
+            if (q->count == q->max_count) {
+                spinlock_unlock(&q->lock);
+                return 0;
+            }
+        При работе на двух ядрах оба потока выполняются параллельно, значит writer() не имеет вышеописанную проблему.
+            reader() и writer() примерно одинаково быстро захватывают и освобождают лок, что и приводит к add_count +- = get_count.
+
+    
+
+d. Часто бывает, что поток, пишущий данные в очередь вынужден ожидать их
+    (например, из сети на select()/poll()). Проэмулируйте эту ситуацию, добавив в
+    поточную функцию писателя периодический вызов usleep(1). Выполните
+    задания из пункта с.
+
+    usleep
+        int usleep(useconds_t usec); 
+            usec - количество микросекунд на которое нужно приостановить выполнение процесса
+        
+        функция приостанавливает выполнение процесса на usec микросекунд. 
+        ! Остановка может продлиться несколько больше из-за системной активности или из-за того, что для осуществления вызова 
+            требуется определенное время.  
+
+    i. работа потоков процесса sync на одном ядре (у reader() и writer() set_cpu(1)) - в htop вижу что загрузка ядра 1 100%
+        работу потоков процесса sync на двух ядрах (у reader() и writer() set_cpu(1 и 2) соответственно) - загрузка ТОЛЬКО ядра 1 100%
+
+        Из-за usleep(1) в бесконечном цикле действие потока writer() делает очень мало попыток добавления элемента в очередь - что видно в выводе:
+            main [26501 4296 26501]
+            qmonitor: [26501 4296 26502]
+            queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+            reader [26501 4296 26503]
+            set_cpu: set cpu 1
+            writer [26501 4296 26504]
+            set_cpu: set cpu 2
+            queue stats: current size 0; attempts: (3768 21806832 -21803064); counts (3768 3768 0)
+            queue stats: current size 0; attempts: (7898 44795723 -44787825); counts (7898 7898 0)
+            queue stats: current size 0; attempts: (12900 70565760 -70552860); counts (12900 12900 0)
+            queue stats: current size 0; attempts: (16045 90844745 -90828700); counts (16045 16045 0)
+
+    ii. в терминале пишу: 
+            gcc queue-threads.c queue.c -o sync && time ./sync
+        
+        при работе на одном ядре: 
+            main [26836 4296 26836]
+            qmonitor: [26836 4296 26837]
+            queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+            reader [26836 4296 26838]
+            set_cpu: set cpu 1
+            writer [26836 4296 26839]
+            set_cpu: set cpu 1
+            queue stats: current size 0; attempts: (121 32438539 -32438418); counts (121 121 0)
+            queue stats: current size 0; attempts: (252 65342545 -65342293); counts (252 252 0)
+            queue stats: current size 0; attempts: (431 96302917 -96302486); counts (431 431 0)
+            queue stats: current size 0; attempts: (596 129180979 -129180383); counts (596 596 0)
+            ^C
+            real    0m4,523s
+            user    0m4,467s
+            sys     0m0,004s
+
+        при работе на двух ядрах:
+            main [27023 4296 27023]
+            reader [27023 4296 27025]
+            qmonitor: [27023 4296 27024]
+            queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+            writer [27023 4296 27026]
+            set_cpu: set cpu 2
+            set_cpu: set cpu 1
+            queue stats: current size 0; attempts: (18921 65024654 -65005733); counts (18921 18921 0)
+            queue stats: current size 0; attempts: (37909 129912688 -129874779); counts (37909 37909 0)
+            queue stats: current size 0; attempts: (56799 194901802 -194845003); counts (56799 56799 0)
+            queue stats: current size 0; attempts: (75760 259938924 -259863164); counts (75760 75760 0)
+            ^C
+            real    0m4,434s
+            user    0m4,583s
+            sys     0m0,005s
+
+        теперь user всегда незначитально превышает real, но не в 2 раза, как это было без usleep(1) на writer() потоке.
+            В каждой итерации writer() спит и его ядро освобождается, и даже при двух зайдействованных ядрах, практически всегда 
+            работает максимум один активный поток - reader().
+            При этом до usleep(1) - когда writer() выполняет:
+                int ok = queue_add(q, i);
+            благодаря queue_add() у user время работы всегда немного больше чем у real + из определения usleep() следует 
+            что оно может занимать несколько больше времени, так как для осуществления вызова требуется определенное время. 
+    
+    iii. Из i: из-за usleep(1) writer() делает очень мало операций вставки элементов, по сравнению с reader() - что видно во 
+        всех выводах выше. Поэтому количество реальных операций по успешному добавлению/извлечению элементов из очереди 
+        всегла совпадает - reader() как только видит появившийся элемент в очереди, сразу его удаляет, а writer() не успевает восполнять. 
+
+
+
+e. Измените реализацию очереди, заменив спинлок на мутекс. Проделайте
+    задания из пунктов b, c и d. Сравните со спинлоком.
+
+    ? mutex vs spinlock
+    -   mutex 
+            когда поток пытается захватить заблокированный мьютекс:
+                он блокируется и переводится в состояние ожидания (sleep)
+                управление передается ядру ОС -> не тратит CPU
+            когда мьютекс освобождается (какой-то второй поток который держал мьютекс его разблокирует):
+                ОС пробуждает наш ожидающий поток (wake up)
+                при получении кванта времени поток продолжит выполнение
+            ! использует сискол futex -> требуется переключение контекста. (НО не потребляет CPU пока спит)
+
+        spinlock
+            когда поток пытается захватить заблокированный спинлок:
+                поток продолжает в цикле проверять состояние лока и пытается заблокировать (значит другой поток не может занять его место)
+                не освобождает CPU
+            ! работает полностью в user space -> не требует переключения контекста
+            ! 100% загрузка ядра CPU из-за цикла ожидания блокировки
+
+        обобщение:
+            при заблокированном мьютексе поток переводится в сон; при заблокированном локе поток постоянно пытается заблокировать.
+            мьютекс использует сисколы, спинлок - нет. 
+            при спящем мьютексе ОС передает ядро активному потоку, при спинлоке долбящийся поток продолжит занимать ядро.
+
+        ответ: https://stackoverflow.com/questions/5869825/when-should-one-use-a-spinlock-instead-of-mutex
+
+    в терминале выполняю:
+        cd ../e
+        gcc queue-threads.c queue.c -o sync && ./sync
+    что изменил:
+        queue.h
+            typedef struct _Queue {
+                ...
+                pthread_mutex_t lock;
+                ...
+            }
+
+        queue.c
+            queue_t* queue_init(int max_count) {
+                ...
+                pthread_mutex_init(&q->lock, NULL);
+                ...
+            }
+
+            void queue_destroy(queue_t *q) {
+                ...
+                pthread_mutex_destroy(&q->lock);
+                ...
+            }
+
+            ...
+        ---------------------------------------------------------------------------------------------------------------------------------------
+            pthread_mutex_init
+                int pthread_mutex_init(pthread_mutex_t *restrict mutex, const pthread_mutexattr_t *restrict attr);
+                    mutex - указатель на объект типа pthread_mutex_t, который будет инициализирован как мьютекс.
+                    attr - указатель на объект типа pthread_mutexattr_t, содержащий атрибуты мьютекса. 
+
+                инициализирует мьютекс, используя атрибуты, указанные объектом атрибутов мьютекса attr. 
+                    Если attr равен NULL, то мьютекс инициализируется с атрибутами по умолчанию (см. pthread_mutexattr_init()). 
+                    После инициализации мьютекс находится в разблокированном состоянии.
+
+                в моем случае: 
+                    queue_t* queue_init(int max_count) {
+                        ...
+                        pthread_mutex_init(&q->lock, NULL);
+                        ...
+                    }
+                
+                https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+                https://www.opennet.ru/cgi-bin/opennet/man.cgi?topic=pthread_mutex_init
+            
+            pthread_mutex_destroy
+                int pthread_mutex_destroy(pthread_mutex_t *mutex);
+                    mutex - указатель на объект типа pthread_mutex_t, который будет уничтожен.
+
+                уничтожает незаблокированный мьютекс mutex. Уничтожить заблокированный мьютекс можно только 
+                    если вы являетесь владельцем этого мьютекса.
+
+                в моем случае:
+                    void queue_destroy(queue_t *q) {
+                        ...
+                        pthread_mutex_destroy(&q->lock);
+                        ...
+                    }
+                
+                https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+                https://www.opennet.ru/cgi-bin/opennet/man.cgi?topic=pthread_mutex_init
+            
+            pthread_mutex_lock
+                int pthread_mutex_lock( pthread_mutex_t *mutex );
+                    mutex - указатель на объект типа pthread_mutex_t, который будет заблокирован.
+
+                блокирует мьютекс mutex. Если мьютекс уже заблокирован, то вызывающий поток блокируется до тех пор, 
+                    пока он не захватит мьютекс. По возвращении из функции, объект мьютекса блокируется и принадлежит 
+                    вызывающему потоку.
+
+                в моем случае:
+                    int queue_add(queue_t *q, int val) {
+                        pthread_mutex_lock(&q->lock);
+                        ...
+                    }
+                
+                https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+                https://www.opennet.ru/man.shtml?topic=pthread_mutex_lock&category=3&russian=1
+
+            pthread_mutex_unlock
+                int pthread_mutex_unlock( pthread_mutex_t *mutex );
+                    mutex - указатель на объект типа pthread_mutex_t, который будет разблокирован.
+
+                в моем случае: 
+                    int queue_add(queue_t *q, int val) {
+                        ...
+                        pthread_mutex_unlock(&q->lock);
+                    }
+
+                разблокирует мьютекс mutex. Мьютекс должен принадлежать вызывающему потоку. Если в мьютексе есть 
+                    заблокированные потоки, ожидающий поток с наивысшим приоритетом разблокируется и становится 
+                    следующим владельцем мьютекса.
+
+                https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+                https://www.opennet.ru/cgi-bin/opennet/man.cgi?topic=pthread_mutex_unlock
+
+    i. Оцените загрузку процессора.
+        для оценки загрузки процессора используем htop - в отдельном терминале запускаю и показываю следующее:
+            работу потоков процесса sync на одном ядре (у reader() и writer() set_cpu(1);) - в htop вижу что загрузка ядра 1 ПОЧТИ 100%
+            работу потоков процесса sync на двух ядрах (у reader() и writer() set_cpu(1 и 2) соответственно) - загрузка ядер 1 и 2 ПОЧТИ 100%
+
+        при mutex-е нагрузка на ядра стабильно незначительно ниже, чем при спинлоке.
+
+    ii. Оцените время проведенное в пользовательском режиме и в режиме ядра.
+
+        в терминале пишу: 
+            gcc queue-threads.c queue.c -o sync && time ./sync
+
+        при работе на одном ядре:
+            main [38130 4296 38130]
+            qmonitor: [38130 4296 38131]
+            queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+            reader [38130 4296 38132]
+            writer [38130 4296 38133]
+            set_cpu: set cpu 1
+            set_cpu: set cpu 1
+            queue stats: current size 12410; attempts: (21017819 25453913 -4436094); counts (12590929 12578519 12410)
+            queue stats: current size 0; attempts: (41786171 50646295 -8860124); counts (25448885 25448885 0)
+            queue stats: current size 100000; attempts: (62963065 76332570 -13369505); counts (37871033 37771033 100000)
+            queue stats: current size 100000; attempts: (83874231 101820820 -17946589); counts (50419172 50319172 100000)
+            queue stats: current size 12702; attempts: (105440841 127805311 -22364470); counts (62389767 62377065 12702)
+            ^C
+            real    0m5,513s
+            user    0m5,511s
+            sys     0m0,002s             
+
+        при работе на двух ядрах:
+            main [38503 4296 38503]
+            qmonitor: [38503 4296 38504]
+            queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+            reader [38503 4296 38505]
+            writer [38503 4296 38506]
+            set_cpu: set cpu 1
+            set_cpu: set cpu 2
+            queue stats: current size 99969; attempts: (7504128 5213390 2290738); counts (5311101 5211132 99969)
+            queue stats: current size 99965; attempts: (15701422 10203168 5498254); counts (10208487 10108522 99965)
+            queue stats: current size 99967; attempts: (23784195 15135008 8649187); counts (15140329 15040362 99967)
+            queue stats: current size 99964; attempts: (32570866 19941737 12629129); counts (19947055 19847091 99964)
+            queue stats: current size 99970; attempts: (40583413 24836211 15747202); counts (24841535 24741565 99970)
+            ^C
+            real    0m5,448s
+            user    0m4,836s
+            sys     0m4,079s
+
+        при работе на одном ядре время совпадает с результатами, полученными при спинлоке, но при работе на двух ядрах результаты отличаются
+            от аналогичных замеров у спинлока: 
+                real    0m6,445s
+                user    0m12,887s
+                sys     0m0,001s
+            ! вижу что системное время возросло (использование сискола futex(2) + переключения контекста), а пользовательское 
+            уменьшилось, так как опять же переключение контекста (теперь мы не пребываем всегда в user space).
+            
+    iii. Оцените текущую заполненность очереди, количество попыток 
+        чтения-записи и количество прочитанных-записанных данных.
+
+        в терминале пишу:
+            gcc queue-threads.c queue.c -o sync &&  ./sync
+
+        при работе на одном ядре:
+            main [41659 4296 41659]
+            qmonitor: [41659 4296 41660]
+            writer [41659 4296 41662]
+            queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+            reader [41659 4296 41661]
+            set_cpu: set cpu 1
+            set_cpu: set cpu 1
+            queue stats: current size 100000; attempts: (20990816 26454828 -5464012); counts (12464902 12364902 100000)
+            queue stats: current size 69992; attempts: (42316718 53364817 -11048099); counts (24501477 24431485 69992)
+            queue stats: current size 45176; attempts: (62913320 79566687 -16653367); counts (37218011 37172835 45176)
+            queue stats: current size 74063; attempts: (84084861 106235237 -22150376); counts (49404671 49330608 74063)
+            ^C
+
+        при работе на двух ядрах:
+            main [41745 4296 41745]
+            reader [41745 4296 41747]
+            qmonitor: [41745 4296 41746]
+            queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+            set_cpu: set cpu 1
+            writer [41745 4296 41748]
+            set_cpu: set cpu 2
+            queue stats: current size 99978; attempts: (7154244 4570902 2583342); counts (4669411 4569433 99978)
+            queue stats: current size 99990; attempts: (15019434 8350706 6668728); counts (8449227 8349237 99990)
+            queue stats: current size 99994; attempts: (22789245 11973010 10816235); counts (12071535 11971541 99994)
+            queue stats: current size 99959; attempts: (30663112 15952662 14710450); counts (16051152 15951193 99959)
+            ^C
+        
+        при работе на одном ядре сохраняется схожий спинлоку разброс, а при работе на двух ядрах - нет. 
+            В спинлоке при двух ядрах было так: reader() и writer() примерно одинаково быстро захватывают и 
+            освобождают лок, что приводило к add_count +- = get_count. Сейчас при захвате мьютекса видим, 
+            что add_count и get_count не равны при работе на двух ядрах. 
+            ? Почему?
+            - когда writer() в queue_add() pthread_mutex_unlock() (futex_wake(2)), у ядра есть список потоков, 
+                ожидающих разблокировки мьютекса. ОС-й может быть выбран поток, который ранее освободил мьютекс - это 
+                только что сделал writer() - его запись свежее reader()-а. 
+                ИТОГО: самоотсос - writer() почти сразу получает мьютекс снова, делает queue_add(), отпускает мьютекс, 
+                    забирается из списка ожидающих потоков, ...  
+                
+
+
+    Часто бывает, что поток, пишущий данные в очередь вынужден ожидать их
+        (например, из сети на select()/poll()). Проэмулируйте эту ситуацию, добавив в
+        поточную функцию писателя периодический вызов usleep(1). Выполните
+        задания из пункта с:
+
+        i. Оцените загрузку процессора.
+            АНАЛОГИЧНО СПИНЛОКУ: 
+                работа потоков процесса sync на одном ядре (у reader() и writer() set_cpu(1)) - в htop вижу что загрузка ядра 1 100%
+                работа потоков процесса sync на двух ядрах (у reader() и writer() set_cpu(1 и 2) соответственно) - загрузка ТОЛЬКО ядра 1 100%
+
+                Из-за usleep(1) в бесконечном цикле действие потока writer() делает очень мало попыток добавления элемента в 
+                очередь - что видно в выводе:
+                    main [34216 4296 34216]
+                    qmonitor: [34216 4296 34217]
+                    queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+                    reader [34216 4296 34218]
+                    set_cpu: set cpu 1
+                    writer [34216 4296 34219]
+                    set_cpu: set cpu 2
+                    queue stats: current size 0; attempts: (18654 69198083 -69179429); counts (18654 18654 0)
+                    queue stats: current size 0; attempts: (37624 139127000 -139089376); counts (37624 37624 0)
+                    queue stats: current size 0; attempts: (56614 209008280 -208951666); counts (56614 56614 0)
+                    queue stats: current size 0; attempts: (75530 278887229 -278811699); counts (75530 75530 0)
+                    queue stats: current size 0; attempts: (94503 348715932 -348621429); counts (94503 94503 0)
+                    queue stats: current size 0; attempts: (113415 418574871 -418461456); counts (113415 113415 0)
+                    queue stats: current size 0; attempts: (132399 488487662 -488355263); counts (132399 132399 0)
+                    queue stats: current size 0; attempts: (151363 558415477 -558264114); counts (151363 151363 0)
+                    queue stats: current size 0; attempts: (170165 627345701 -627175536); counts (170165 170165 0)
+                    queue stats: current size 0; attempts: (189054 696931057 -696742003); counts (189054 189054 0)
+                    ^C
+
+        ii. Оцените время проведенное в пользовательском режиме и в режиме ядра.
+
+            в терминале пишу: 
+                gcc queue-threads.c queue.c -o sync && time ./sync
+
+            при работе на одном ядре:
+                main [39434 4296 39434]
+                qmonitor: [39434 4296 39435]
+                queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+                reader [39434 4296 39436]
+                writer [39434 4296 39437]
+                set_cpu: set cpu 1
+                set_cpu: set cpu 1
+                queue stats: current size 0; attempts: (18268 65917203 -65898935); counts (18268 18268 0)
+                queue stats: current size 0; attempts: (36568 132391773 -132355205); counts (36568 36568 0)
+                queue stats: current size 0; attempts: (54663 198037718 -197983055); counts (54663 54663 0)
+                queue stats: current size 0; attempts: (72973 264517253 -264444280); counts (72973 72973 0)
+                queue stats: current size 0; attempts: (91288 331051689 -330960401); counts (91288 91288 0)
+                ^C
+                real    0m5,432s
+                user    0m5,416s
+                sys     0m0,004s
+
+            при работе на двух ядрах:
+                main [39600 4296 39600]
+                qmonitor: [39600 4296 39601]
+                queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+                reader [39600 4296 39602]
+                writer [39600 4296 39603]
+                set_cpu: set cpu 1
+                set_cpu: set cpu 2
+                queue stats: current size 0; attempts: (18914 69373767 -69354853); counts (18914 18914 0)
+                queue stats: current size 0; attempts: (37898 139244694 -139206796); counts (37898 37898 0)
+                queue stats: current size 0; attempts: (56832 209111520 -209054688); counts (56832 56832 0)
+                queue stats: current size 0; attempts: (75754 278871722 -278795968); counts (75754 75754 0)
+                queue stats: current size 0; attempts: (94731 348673426 -348578695); counts (94731 94731 0)
+                ^C
+                real    0m5,570s
+                user    0m5,781s
+                sys     0m0,008s
+
+            было на двух ядрах, без usleep(1): 
+                real    0m5,448s
+                user    0m4,836s
+                sys     0m4,079s
+            теперь user всегда незначитально превышает real, но не в 2 раза, как это было без usleep(1) на writer() потоке.
+                при двух задействованных ядрах, практически всегда работает чаще всего один активный поток - reader().
+                При этом до usleep(1) writer() выполняет это:
+                    int ok = queue_add(q, i);
+                - благодаря queue_add() у user время работы всегда немного больше чем у real + из определения usleep() следует 
+                что оно может занимать несколько больше времени, так как для осуществления вызова требуется определенное время.
+            
+            ? куда делось sys время работы?
+            - sys - время, которое процесс провёл АКТИВНО внутри ядра (на системных вызовах: futex, nanosleep, read, write, ...).
+                без usleep(1) потоки "сонно" борются за lock - если один уже захватил мьютекс, то у другого попытка 
+                    pthread_mutex_lock() вызывает сискол futex_wait(), а потом futex_wake при разблокировке мьютекса.
+                с usleep(1) поток writer() после каждой попытки выполнить добавление элемента в queue_add() уходит в nanosleep() 
+                    (сискол вызываемый usleep()), и при этом поток уходит в состояние ожидания (sleep), не потребляя CPU.
+                
+                ИТОГО: sys почти занулен так как нет futex_wait()/futex_wake(), вместо них у writer()-а идут nanosleep(), 
+                    а он не засчитывается в sys в sys идет только то время, которое CPU тратил на ВЫПОЛНЕНИЕ (а writer() спит) 
+                    потока в kernel mode.
+
+        iii. Оцените текущую заполненность очереди, количество попыток 
+            чтения-записи и количество прочитанных-записанных данных.
+
+            в терминале пишу: 
+                gcc queue-threads.c queue.c -o sync && ./sync
+
+            при работе на одном ядре:
+                main [41819 4296 41819]
+                qmonitor: [41819 4296 41820]
+                queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+                reader [41819 4296 41821]
+                writer [41819 4296 41822]
+                set_cpu: set cpu 1
+                set_cpu: set cpu 1
+                queue stats: current size 0; attempts: (17928 64360387 -64342459); counts (17928 17928 0)
+                queue stats: current size 0; attempts: (36233 130787003 -130750770); counts (36233 36233 0)
+                queue stats: current size 0; attempts: (54575 197254380 -197199805); counts (54575 54575 0)
+                queue stats: current size 0; attempts: (72880 263781876 -263708996); counts (72880 72880 0)
+                ^C
+
+            при работе на двух ядрах:
+                main [41870 4296 41870]
+                qmonitor: [41870 4296 41871]
+                queue stats: current size 0; attempts: (0 0 0); counts (0 0 0)
+                reader [41870 4296 41872]
+                writer [41870 4296 41873]
+                set_cpu: set cpu 1
+                set_cpu: set cpu 2
+                queue stats: current size 0; attempts: (18814 68282255 -68263441); counts (18814 18814 0)
+                queue stats: current size 0; attempts: (37812 138118505 -138080693); counts (37812 37812 0)
+                queue stats: current size 0; attempts: (56808 208014852 -207958044); counts (56808 56808 0)
+                queue stats: current size 0; attempts: (75790 277929588 -277853798); counts (75790 75790 0)
+                ^C
+
+            Из i: из-за usleep(1) writer() делает очень мало операций вставки элементов, по сравнению с reader() - что видно во 
+                всех выводах выше. Поэтому количество реальных операций по успешному добавлению/извлечению элементов из очереди 
+                всегла совпадает - reader() как только видит появившийся элемент в очереди, сразу его удаляет, а writer() 
+                не успевает восполнять. 

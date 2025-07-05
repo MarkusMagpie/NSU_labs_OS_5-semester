@@ -11,6 +11,8 @@
 
 #include <pthread.h>
 
+# include <semaphore.h>
+
 typedef struct _QueueNode {
 	int val;
 	struct _QueueNode *next;
@@ -34,9 +36,9 @@ typedef struct _Queue {
 
 	// мьютекс вместо спинлока
     pthread_mutex_t lock;
-	//  НОВОЕ - условные переменные
-	pthread_cond_t not_full;
-    pthread_cond_t not_empty; 
+	//  НОВОЕ - семафоры
+	sem_t slots; // сколько ещё узлов можно добавить
+    sem_t items; // сколько узлов доступно для чтения
 } queue_t;
 
 queue_t* queue_init(int max_count);

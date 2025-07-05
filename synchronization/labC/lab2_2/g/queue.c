@@ -28,9 +28,9 @@ queue_t* queue_init(int max_count) {
 	}
 
     pthread_mutex_init(&q->lock, NULL);
-	// НОВОЕ
-	pthread_cond_init (&q->not_full, NULL);
-    pthread_cond_init (&q->not_empty, NULL);
+	// НОВОЕ (добавить можно max_count, прочитать 0)
+	sem_init(&q->slots, 0, max_count);
+    sem_init(&q->items, 0, 0);
 
 	q->first = NULL;
 	q->last = NULL;
@@ -55,10 +55,6 @@ void queue_destroy(queue_t *q) {
     pthread_cancel(q->qmonitor_tid);
     pthread_join (q->qmonitor_tid, NULL);
 
-	// НОВОЕ - разблокировать всех, если кто‑то ждёт
-    pthread_cond_broadcast(&q->not_full);
-    pthread_cond_broadcast(&q->not_empty);
-
     // вычищаю все узлы в списке
     qnode_t *cur = q->first;
     while (cur) {
@@ -67,10 +63,10 @@ void queue_destroy(queue_t *q) {
         cur = next;
     }
 
-	// НОВОЕ
     pthread_mutex_destroy(&q->lock);
-	pthread_cond_destroy (&q->not_full);
-    pthread_cond_destroy (&q->not_empty);
+	// НОВОЕ
+	sem_destroy(&q->slots);
+    sem_destroy(&q->items);
 
     // освободил структуру самой очереди
     free(q);
@@ -80,13 +76,9 @@ void queue_destroy(queue_t *q) {
 
 // попытка поместить новый элемент в конец очереди q и обновить статистику 
 int queue_add(queue_t *q, int val) {
+	sem_wait(&q->slots); // НОВОЕ: жду, пока найдётся свободный слот
 	pthread_mutex_lock(&q->lock); // futex_wait(2)
 	q->add_attempts++;
-
-	// если очередь полная, этот поток writer()-а засыпает по q->not_full, освобождая мьютекс, жду сигнала для пробуждения
-	while (q->count == q->max_count) {
-        pthread_cond_wait(&q->not_full, &q->lock);
-    }
 
 	qnode_t *new = malloc(sizeof(qnode_t));
 	if (!new) {
@@ -107,21 +99,16 @@ int queue_add(queue_t *q, int val) {
 	q->count++;
 	q->add_count++;
 
-	// сигналю одному потоку reader()-а что очередь не пустая
-	pthread_cond_signal(&q->not_empty);
 	pthread_mutex_unlock(&q->lock);
+	sem_post(&q->items); // НОВОЕ: сигнал читателю что в очереди появился ещё один узел
 	return 1;
 }
 
 // попытка извлечь элемент из головы очереди и вернуть его значение, обновляя при этом статистику q
 int queue_get(queue_t *q, int *val) {
+	sem_wait(&q->items); // НОВОЕ: жду пока появится хотя бы один элемент
 	pthread_mutex_lock(&q->lock);
 	q->get_attempts++;
-
-	// если очередь пустая, этот поток reader()-а засыпает по q->not_empty, освобождая мьютекс, жду сигнала для пробуждения
-    while (q->count == 0) {
-        pthread_cond_wait(&q->not_empty, &q->lock);
-    }
 
 	qnode_t *tmp = q->first;
 
@@ -133,9 +120,8 @@ int queue_get(queue_t *q, int *val) {
 	q->count--;
 	q->get_count++;
 
-	// сигналю одному потоку writer()-а что очередь не полная
-	pthread_cond_signal(&q->not_full);
 	pthread_mutex_unlock(&q->lock);
+	sem_post(&q->slots); // НОВОЕ: сигнал писателю что освободился один узел
 	return 1;
 }
 

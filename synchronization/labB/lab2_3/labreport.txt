@@ -48,6 +48,46 @@
 
 Для синхронизации доступа к элементам списка использую: 
     1) мьютексы
+        в термианле пишу: 
+            gcc main1.c queue1.c -o res && ./res
+        вывод (пример):
+            1 (swap=0 asc=0 dsc=0 eq=0)
+            2 (swap=0 asc=0 dsc=0 eq=0)
+            3 (swap=0 asc=0 dsc=0 eq=0)
+            4 (swap=0 asc=0 dsc=0 eq=0)
+            5 (swap=0 asc=0 dsc=0 eq=0)
+            6 (swap=0 asc=0 dsc=0 eq=0)
+            7 (swap=0 asc=0 dsc=0 eq=0)
+            8 (swap=0 asc=0 dsc=0 eq=0)
+            9 (swap=0 asc=0 dsc=0 eq=0)
+            10 (swap=0 asc=0 dsc=0 eq=0)
+            TOTAL: swap=0 asc=0 dsc=0 eq=0
+
+            3 (swap=228342 asc=9928 dsc=0 eq=79704)
+            1 (swap=227974 asc=9426 dsc=0 eq=80725)
+            10 (swap=227908 asc=0 dsc=94430 eq=0)
+            7 (swap=228341 asc=10630 dsc=0 eq=80076)
+            9 (swap=228003 asc=10496 dsc=0 eq=78920)
+            2 (swap=227811 asc=9526 dsc=0 eq=80096)
+            6 (swap=228142 asc=9200 dsc=0 eq=79866)
+            5 (swap=228283 asc=9648 dsc=0 eq=78980)
+            4 (swap=228231 asc=9295 dsc=0 eq=80465)
+            8 (swap=228412 asc=10144 dsc=0 eq=80316)
+            TOTAL: swap=2281447 asc=88293 dsc=94430 eq=719148
+
+            8 (swap=566244 asc=22754 dsc=0 eq=209052)
+            7 (swap=566993 asc=22375 dsc=0 eq=209691)
+            3 (swap=566654 asc=22091 dsc=0 eq=211290)
+            4 (swap=566493 asc=21102 dsc=0 eq=210638)
+            6 (swap=565629 asc=21257 dsc=0 eq=209829)
+            1 (swap=566091 asc=21080 dsc=0 eq=211565)
+            9 (swap=566171 asc=22183 dsc=0 eq=208441)
+            5 (swap=566247 asc=21337 dsc=0 eq=208021)
+            2 (swap=565667 asc=21305 dsc=0 eq=210939)
+            10 (swap=566110 asc=0 dsc=237221 eq=0)
+            TOTAL: swap=5662299 asc=195484 dsc=237221 eq=1889466
+            ...
+
         pthread_mutex_init
             int pthread_mutex_init(pthread_mutex_t *restrict mutex, const pthread_mutexattr_t *restrict attr);
                 mutex - указатель на объект типа pthread_mutex_t, который будет инициализирован как мьютекс.
@@ -237,9 +277,210 @@
                         с вероятностью 50% меняем местами узлы curr2 и curr3 - после этого curr3 идет за curr1 - 
                             можно снять мьютекс с прежнего curr1 (мы сдвигаемся и работаем теперь с curr2 и curr3). 
 
-    2) спинлоки (queue2.h, queue2.c, main2.c):
-        queue2.c:
+    2) спинлоки:
+        в терминале пишу: 
+            gcc main2.c queue2.c -o res && ./res
+        вывод(пример):
+            1 (swap=0 asc=0 dsc=0 eq=0)
+            2 (swap=0 asc=0 dsc=0 eq=0)
+            3 (swap=0 asc=0 dsc=0 eq=0)
+            4 (swap=0 asc=0 dsc=0 eq=0)
+            5 (swap=0 asc=0 dsc=0 eq=0)
+            6 (swap=0 asc=0 dsc=0 eq=0)
+            7 (swap=0 asc=0 dsc=0 eq=0)
+            8 (swap=0 asc=0 dsc=0 eq=0)
+            9 (swap=0 asc=0 dsc=0 eq=0)
+            10 (swap=0 asc=0 dsc=0 eq=0)
+            TOTAL: swap=0 asc=0 dsc=0 eq=0
 
-        main2.c:
+            8 (swap=275159 asc=16006 dsc=0 eq=174544)
+            7 (swap=275143 asc=15810 dsc=0 eq=174594)
+            4 (swap=275740 asc=15750 dsc=0 eq=174080)
+            10 (swap=275792 asc=0 dsc=201268 eq=0)
+            2 (swap=275283 asc=16118 dsc=0 eq=173925)
+            3 (swap=275594 asc=16047 dsc=0 eq=174547)
+            5 (swap=274973 asc=15948 dsc=0 eq=173814)
+            6 (swap=275335 asc=16042 dsc=0 eq=173851)
+            1 (swap=275365 asc=16157 dsc=0 eq=173727)
+            9 (swap=275078 asc=15922 dsc=0 eq=174081)
+            TOTAL: swap=2753462 asc=143800 dsc=201268 eq=1567163
+
+            5 (swap=566701 asc=32192 dsc=0 eq=355478)
+            4 (swap=567461 asc=32087 dsc=0 eq=355772)
+            2 (swap=567289 asc=32237 dsc=0 eq=355625)
+            8 (swap=566613 asc=32235 dsc=0 eq=356428)
+            1 (swap=566825 asc=32453 dsc=0 eq=355098)
+            6 (swap=566635 asc=32249 dsc=0 eq=355160)
+            9 (swap=567052 asc=32176 dsc=0 eq=355888)
+            3 (swap=566779 asc=32252 dsc=0 eq=356681)
+            7 (swap=566747 asc=32025 dsc=0 eq=356867)
+            10 (swap=567279 asc=0 dsc=413817 eq=0)
+            TOTAL: swap=5669381 asc=289906 dsc=413817 eq=3202997
+            ...
+        
+        pthread_spin_init
+            int pthread_spin_init(pthread_spinlock_t *lock, int pshared);
+                lock - указатель на объект pthread_spinlock_t, который требуется инициализировать.
+                pshared - значение, которое требуется использовать для межпроцессного атрибута циклической блокировки. Возможные значения: 
+                    PTHREAD_PROCESS_SHARED - циклическая блокировка может использоваться любым потоком, имеющим доступ к памяти, в которой 
+                        выделена циклическая блокировка, даже если она выделена в памяти, совместно используемой несколькими процессами.
+                    PTHREAD_PROCESS_PRIVATE - с циклической блокировкой могут работать только потоки, созданные в том же процессе, что и 
+                        поток, инициализировавший циклическую блокировку. Если потоки разных процессов пытаются работать с такой циклической 
+                        блокировкой, поведение не определено.
+
+            в моем случае:
+                Storage *init_storage(int capacity) {
+                    ...
+                    pthread_spin_init(&(storage->sync), 0);
+                    ...
+                }
+
+            выделяет ресурсы, необходимые для циклической блокировки потока lock, и инициализирует lock в разблокированном состоянии.
+
+            https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+            https://www.opennet.ru/man.shtml?topic=pthread_spin_init&category=3&russian=5
+            
+        pthread_spin_lock
+            int pthread_spin_lock(pthread_spinlock_t *lock);
+                lock - указатель на объект pthread_spinlock_t, который требуется заблокировать.
+
+            в моем случае:
+                void *compare_length_thread(void *data) {
+                    ...
+                    pthread_spin_lock(&storage->sync);
+                    ...
+                }
+
+            блокирует циклическую блокировку потока lock. Если lock не доступен немедленно, pthread_spin_lock() блокируется до тех пор, 
+                пока lock не сможет снова быть заблокирован.
+
+            https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+            https://www.opennet.ru/man.shtml?topic=pthread_spin_lock&category=3&russian=5
+
+        pthread_spin_unlock
+            int pthread_spin_unlock(pthread_spinlock_t *lock);
+                lock - указатель на объект pthread_spinlock_t, который требуется разблокировать.
+
+            в моем случае:
+                void *compare_length_thread(void *data) {
+                    ...
+                    pthread_spin_unlock(&storage->sync);
+                    ...
+                }
+
+            разблокирует циклическую блокировку потока lock, которая была заблокирована с помощью pthread_spin_lock() или pthread_spin_trylock().
+
+            https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+            https://www.opennet.ru/man.shtml?topic=pthread_spin_unlock&category=3&russian=4
+
+        ? mutex vs spinlock
+        -   mutex 
+                когда поток пытается захватить заблокированный мьютекс:
+                    он блокируется и переводится в состояние ожидания (sleep)
+                    управление передается ядру ОС -> не тратит CPU
+                когда мьютекс освобождается (какой-то второй поток который держал мьютекс его разблокирует):
+                    ОС пробуждает наш ожидающий поток (wake up)
+                    при получении кванта времени поток продолжит выполнение
+                ! использует сискол futex -> требуется переключение контекста. (НО не потребляет CPU пока спит)
+
+            spinlock
+                когда поток пытается захватить заблокированный спинлок:
+                    поток продолжает в цикле проверять состояние лока и пытается заблокировать (значит другой поток не может занять его место)
+                    не освобождает CPU
+                ! работает полностью в user space -> не требует переключения контекста
+                ! 100% загрузка ядра CPU из-за цикла ожидания блокировки
+
+            обобщение:
+                при заблокированном мьютексе поток переводится в сон; при заблокированном локе поток постоянно пытается заблокировать.
+                мьютекс использует сисколы, спинлок - нет. 
+                при спящем мьютексе ОС передает ядро активному потоку, при спинлоке долбящийся поток продолжит занимать ядро.
+
+            ответ: https://stackoverflow.com/questions/5869825/when-should-one-use-a-spinlock-instead-of-mutex
     
     3) блокировки чтения-записи
+        в терминале пишу:
+            gcc main3.c queue3.c -o res && ./res
+        вывод:
+            1 (swap=0 asc=0 dsc=0 eq=0)
+            2 (swap=0 asc=0 dsc=0 eq=0)
+            3 (swap=0 asc=0 dsc=0 eq=0)
+            4 (swap=0 asc=0 dsc=0 eq=0)
+            5 (swap=0 asc=0 dsc=0 eq=0)
+            6 (swap=0 asc=0 dsc=0 eq=0)
+            7 (swap=0 asc=0 dsc=0 eq=0)
+            8 (swap=0 asc=0 dsc=0 eq=0)
+            9 (swap=0 asc=152 dsc=0 eq=0)
+            10 (swap=0 asc=0 dsc=0 eq=0)
+            TOTAL: swap=0 asc=153 dsc=0 eq=0
+
+            8 (swap=82736 asc=20046 dsc=0 eq=150171)
+            3 (swap=82671 asc=19607 dsc=0 eq=152687)
+            2 (swap=82747 asc=19339 dsc=0 eq=152485)
+            5 (swap=83076 asc=19628 dsc=0 eq=152571)
+            9 (swap=82792 asc=20072 dsc=0 eq=150423)
+            10 (swap=83002 asc=0 dsc=166849 eq=0)
+            6 (swap=82781 asc=19418 dsc=0 eq=151535)
+            1 (swap=83037 asc=19667 dsc=0 eq=150895)
+            7 (swap=82955 asc=19436 dsc=0 eq=152294)
+            4 (swap=83116 asc=19834 dsc=0 eq=151624)
+            TOTAL: swap=828913 asc=177047 dsc=166849 eq=1364685
+
+            10 (swap=165412 asc=0 dsc=361601 eq=0)
+            7 (swap=165920 asc=37863 dsc=0 eq=323670)
+            6 (swap=165499 asc=38343 dsc=0 eq=321704)
+            5 (swap=165718 asc=38384 dsc=0 eq=322769)
+            3 (swap=165080 asc=38514 dsc=0 eq=323121)
+            2 (swap=165470 asc=37839 dsc=0 eq=322885)
+            9 (swap=165031 asc=38881 dsc=0 eq=319690)
+            1 (swap=165931 asc=37829 dsc=0 eq=321442)
+            4 (swap=165910 asc=38350 dsc=0 eq=322168)
+            TOTAL: swap=1489971 asc=306003 dsc=361601 eq=2577449
+            ...
+
+        блокировка чтения-записи разделяет доступ на:
+            чтение: множество потоков могут читать одновременно
+            запись: только один поток может писать (исключая все другие)
+
+        pthread_rwlock_init
+            int pthread_rwlock_init( pthread_rwlock_t *rwl, const pthread_rwlockattr_t *attr );
+                rwl - указатель на объект pthread_rwlock_t, который требуется инициализировать.
+                attr - NULL, или указатель на pthread_rwlockattr_t, хранящую атрибуты, которые требуется использовать для 
+                    блокировки чтения-записи; см. pthread_rwlockattr_init().
+
+            инициализирует блокировку чтения-записи, на которую ссылается rwl, с атрибутами attr. Необходимо 
+                инициализировать блокировки чтения-записи перед их использованием. Если attr равен NULL, rwl 
+                инициализируется значениями по умолчанию.
+
+            https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+
+        pthread_rwlock_wrlock
+            int pthread_rwlock_wrlock( pthread_rwlock_t *rwl );
+                rwl - указатель на объект pthread_rwlock_t, который требуется заблокировать для записи. 
+
+            становит блокировку чтения‑записи rwl для записи. Если в данный момент кто‑то уже держит 
+                блокировку на чтение (один или несколько потоков) или на запись (один), вызывающий 
+                поток будет заблокирован до тех пор, пока все текущие держатели блокировки не отпустят её.
+
+            https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+
+        pthread_rwlock_rdlock
+            int pthread_rwlock_rdlock(pthread_rwlock_t *rwl);
+                rwl - указатель на объект pthread_rwlock_t, который требуется заблокировать для чтения.
+
+            ставит блокировку чтения-записи rwl для чтения. 
+            Если в данный момент кто-то держит блокировку на запись, то ваш поток блокируется до 
+                тех пор, пока писатель не вызовет pthread_rwlock_unlock().
+
+            https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+
+        pthread_rwlock_unlock
+            int pthread_rwlock_unlock( pthread_rwlock_t *rwl );
+                rwl - указатель на объект pthread_rwlock_t, который требуется разблокировать.
+
+            снимает любую ранее установленную на rwl блокировку - как на чтение, так и на запись. 
+                Т.е. если текущий поток держал блокировку в write режиме (pthread_rwlock_wrlock()), то 
+                она освобождается, и любой из ожидающих потоков (читателей или писателей) может 
+                получить доступ к ресурсу. 
+                По аналогии с блокировкой в read режиме (pthread_rwlock_rdlock()).
+
+            https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html

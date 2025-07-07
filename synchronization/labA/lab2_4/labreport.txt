@@ -30,6 +30,12 @@
         в терминале пишу:
             cd custom_spinlock
             gcc main.c queue.c myspinlock.c -o res && ./res
+        
+
+    2) кастомный мутекс
+        в терминале пишу:
+            cd custom_mutex
+            gcc main.c queue.c mymutex.c -o res && ./res
 
         futex - fast userspace mutex - механизм синхронизации, позволяет случае работать без перехода в ядро 
             (через атомарные CAS‑операции в userspace) и только при конкуренции использовать один сискол для сна/пробуждения.
@@ -42,8 +48,8 @@
                 timeout - время ожидания, если op = FUTEX_WAIT
                 uaddr2 - не используется
                 val3 - не используется
-        
-        я взял большую часть кода из lab2_3. Из нового только myspinlock.c:
+
+        я взял большую часть кода из lab2_3. Из нового только mymutex.c:
             int futex_wait(atomic_int *uaddr, int val) 
                 если по адресу uaddr лежит val, засунь меня в список спящих потоков; разбуди меня, 
                     когда кто‑то вызовет FUTEX_WAKE():
@@ -53,10 +59,10 @@
                 разбуди до n спящих потоков, которые ждут на этом адресе uaddr:
                 return syscall(SYS_futex, uaddr, FUTEX_WAKE, n, NULL, NULL, 0);
 
-            void custom_spinlock_init(custom_spinlock_t *s)
+            void custom_mutex_init(custom_spinlock_t *s)
 
-            void custom_spinlock_lock(custom_spinlock_t *s)
-                если поток не может захватить лок (он уже 1 <-> захвачен), то делаю futex_wait() <-> засыпаю, пока 
+            void custom_mutex_lock(custom_spinlock_t *s)
+                если поток не может захватить мьютекс (он уже 1 <-> захвачен), то делаю futex_wait() <-> засыпаю, пока 
                     значение в *uaddr не станет другим благодаря другим потокам.
 
                 atomic_compare_exchange_strong
@@ -76,15 +82,13 @@
                     https://spec-zone.ru/cpp/atomic/atomic_compare_exchange
 
             void custom_spinlock_unlock(custom_spinlock_t *s) 
-                потоки ожидающие на s->lock выполняют futex_wait() и когда лок освобождается, futex_wake() сообщает ОС, что есть поток, 
+                потоки ожидающие на s->lock выполняют futex_wait() и когда мьютекс освобождается, futex_wake() сообщает ОС, что есть поток, 
                     который может продолжить выполнение.
-                atomic_store() - снимает лок (s->lock = 0)
+                atomic_store() - снимает мьютекс (s->lock = 0)
                 futex_wake() - пробуждает один поток который ожидает на s->lock
             
-            пример: поток a захватил лок и работает, 
-                    поток b пытается захватить тот же лок и засыпает ожидая с помощью futex_wait(),
-                    когда a доработал, вызовется custom_spinlock_unlock() и в нем atomic_store() для освобождения лока,
+            пример: поток a захватил мьютекс и работает, 
+                    поток b пытается захватить тот же мьютекс и засыпает ожидая с помощью futex_wait(),
+                    когда a доработал, вызовется custom_mutex_unlock() и в нем atomic_store() для освобождения мьютекса,
                     затем futex_wake() пробудить один из потоков (b) которые были заблокированы,
-                    так как теперь лок освободился, b его захватывает и работает сам. 
-
-    2)
+                    так как теперь мьютекс освободился, b его захватывает и работает сам. 

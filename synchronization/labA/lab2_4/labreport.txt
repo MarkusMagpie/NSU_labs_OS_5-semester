@@ -31,6 +31,40 @@
             cd custom_spinlock
             gcc main.c queue.c myspinlock.c -o res && ./res
         
+        реализация взята из lab2_2, без особых изменений.
+
+        atomic_int
+            тип данных, который, в отличие от простого int, гарантирует атомарность всех операций с ним.
+
+        ? почему используем atomic_int а не int?
+        - чтобы не было гонок между потоками при проверке и установке флага lock. Если бы взяли int, то например два потока 
+            могли бы прочитать лок как 1 и оба записать 0, посчитав, что они захватили лок. Но 2 потока не могут захватывать лок одновременно.
+        
+        atomic_init
+            void atomic_init(volatile atomic_int *object, atomic_int desired)
+                object - указатель на переменную типа atomic_int, которую нужно инициализировать.
+                desired - значение, с которым должна быть инициализирована эта переменная.
+
+            используется для инициализации атомарного объекта. Устанавливает начальное значение атомарной переменной.
+
+            в моем случае: 
+                atomic_init(&s->lock, 1);
+
+        atomic_compare_exchange_strong
+            bool atomic_compare_exchange_strong(volatile atomic_int *object, atomic_int *expected, atomic_int desired)
+                object - указатель на переменную типа atomic_int, которую нужно изменить.
+                expected - указатель на переменную типа atomic_int, содержащую ожидаемое значение.
+                desired - новое значение, которое нужно установить.
+
+            сравнивает текущее значение атомарной переменной object со значением, указанным в expected. Если они равны, то устанавливает 
+                значение desired в object и возвращает trut. В противном случае, оставляет object без изменений и возвращает false.
+
+            в моем случае:
+                if (atomic_compare_exchange_strong(&s->lock, &one, 0)) {
+                    break;
+                }
+            
+            https://spec-zone.ru/cpp/atomic/atomic_compare_exchange
 
     2) кастомный мутекс
         в терминале пишу:
@@ -64,22 +98,6 @@
             void custom_mutex_lock(custom_spinlock_t *s)
                 если поток не может захватить мьютекс (он уже 1 <-> захвачен), то делаю futex_wait() <-> засыпаю, пока 
                     значение в *uaddr не станет другим благодаря другим потокам.
-
-                atomic_compare_exchange_strong
-                    bool atomic_compare_exchange_strong(volatile atomic_int *object, atomic_int *expected, atomic_int desired)
-                        object - указатель на переменную типа atomic_int, которую нужно изменить.
-                        expected - указатель на переменную типа atomic_int, содержащую ожидаемое значение.
-                        desired - новое значение, которое нужно установить.
-
-                    сравнивает текущее значение атомарной переменной object со значением, указанным в expected. Если они равны, то устанавливает 
-                        значение desired в object и возвращает trut. В противном случае, оставляет object без изменений и возвращает false.
-
-                    в моем случае:
-                        if (atomic_compare_exchange_strong(&s->lock, &one, 0)) {
-                            break;
-                        }
-                    
-                    https://spec-zone.ru/cpp/atomic/atomic_compare_exchange
 
             void custom_spinlock_unlock(custom_spinlock_t *s) 
                 потоки ожидающие на s->lock выполняют futex_wait() и когда мьютекс освобождается, futex_wake() сообщает ОС, что есть поток, 

@@ -1,0 +1,286 @@
+3.2. Реализуйте многопоточный HTTP-proxy (версия HTTP 1.0). Прокси должен принимать
+    соединения на 80 порту и перенаправлять их на требуемый сервер. Вся обработка
+    соединения должна происходить в отдельном потоке.
+
+    ? в чем отличие простого сервера от прокси?
+    - простой http-сервер сам отвечает на запросы от клиентов.
+        Пример работы такого TCP-сервера из lab7task2:
+            void handle_client(int client_sock_fd) {
+                char buffer[BUFFER_SIZE]; // буфер для приема/отправки данных клиента
+                ssize_t bytes_read;
+                
+                // цикл работает пока присвоенный bytes_read результат работы recv - чтения данных с сокета != 0
+                while (bytes_read = recv(client_sock_fd, buffer, BUFFER_SIZE, 0)) {
+                    if (bytes_read < 0) {
+                        printf("recv failed");
+                        break;
+                    }
+                    buffer[bytes_read] = '\0';
+                    printf("получено %s\n", buffer);
+                    // эхо-ответ обратно клиенту 
+                    // send(client_sock_fd, buffer, bytes_read, 0);
+                    if (send_all(client_sock_fd, buffer, bytes_read) < 0) {
+                        printf("send_all (send(s)) failed");
+                        break;
+                    }
+                    memset(buffer, 0, BUFFER_SIZE);
+                }
+
+                close(client_sock_fd);
+                exit(0);
+            } 
+
+        прокси принимает соединение и перенаправляет его на требуемый сервер:
+            1) принимает полный HTTP-запрос: строка запроса, строка заголовков
+            2) парсит заголовок чтобы понять куда перенаправить запрос
+            3) сам не формирует ответ а перенаправляет запрос на целевой сервер
+            ...
+            ?) получает ответ от целевого сервера и пересылает его обратно.
+
+
+    как запускать: 
+        1 терминал: 
+            gcc -o proxy proxy_nocache.c && sudo ./proxy
+        2 терминал: 
+            curl -v -x http://localhost:80 http://example.com/
+
+    socket
+            int socket (int domain, int type, int protocol)
+                domain - cпецификация семейства адресов
+                type - cпецификация типа для нового сокета
+                protocol - Используемый протокол. 
+                    Возможные параметры параметра протокола относятся к указанному семейству адресов и типу сокета. 
+
+            в моем случае:
+                socket(AF_INET, SOCK_DGRAM, 0)
+                    AF_INET - cемейство адресов IPv4 
+                    SOCK_STREAM - тип сокета, который предоставляет виртуационные, надежные двусторонние потоки байтов на основе подключений 
+                        с механизмом передачи данных OOB. Этот тип сокета использует протокол TCP  
+                    0 - вызывающий объект не хочет указывать протокол, и поставщик услуг выберет протокол для использования
+
+            https://learn.microsoft.com/ru-ru/windows/win32/api/winsock2/nf-winsock2-socket
+            https://www.opennet.ru/docs/RUS/linux_base/node245.html
+
+    struct sockaddr_in
+        struct sockaddr_in {
+            sa_family_t     sin_family;     /* AF_INET */
+            in_port_t       sin_port;       /* Port number */
+            struct in_addr  sin_addr;       /* IPv4 address */
+        };
+
+        в моем случае: 
+            сервер: 
+                server_addr.sin_family = AF_INET; // IP адрес к которому будет привязан сокет (IPv4)
+                server_addr.sin_port = htons(PORT); // номер порта к которому будет привязан сокет
+            клиент: 
+                server_addr.sin_family = AF_INET;
+                server_addr.sin_port = htons(PORT);
+
+        Структура sockaddr_in описывает сокет для работы с протоколами IP. 
+            Значение поля sin_family всегда равно AF_INET.
+            Поле sin_port содержит номер порта который намерен занять процесс. 
+                Если значение этого поля равно нулю, то операционная система сама выделит свободный номер порта для сокета. 
+            Поле sin_addr типа структуры in_addr, содержит IP адрес к которому будет привязан сокет.
+                Структура in_addr содержит поле s_addr. Этому полю можно присвоить 32х битное значение IP адреса. 
+
+        https://www.opennet.ru/docs/RUS/socket/node4.html
+        https://man7.org/linux/man-pages/man3/sockaddr.3type.html
+        https://learn.microsoft.com/ru-ru/windows/win32/api/ws2def/ns-ws2def-sockaddr_in
+
+    htons
+        uint16_t htons(uint16_t hostshort);
+        Функция htons() преобразует узловой порядок расположения байтов 
+            положительного короткого целого hostshort в сетевой порядок расположения байтов.
+        
+        https://www.opennet.ru/man.shtml?topic=htons&category=3&russian=0
+
+    bind
+        int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+            sockfd - дескриптор, определяющий несвязанный сокет, ему мы функцией bind задаем адрес
+            addr - указатель на структуру sockaddr локального адреса, назначаемого связанному сокету
+            addrlen - длина (в байтах) значения, на которое указывает addr
+
+        в моем случае: 
+            bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr))
+
+        функция используется сервером для присваивания сокету имени. До выполнения функции bind (т.е. присваивания 
+            какого-либо имени, вид которого зависит от адресного домена) сокет недоступен программам-клиентам.
+
+        https://learn.microsoft.com/ru-ru/windows/win32/api/winsock/nf-winsock-bind
+        https://www.opennet.ru/docs/RUS/linux_base/node246.html
+
+    listen
+        int listen(int s, int backlog)
+            s - сокет для прослушивания 
+            backlog - целое положительное число, определяющее, как много запросов связи может быть принято на сокет одновременно.
+
+        Функция listen используется сервером, чтобы информировать ОС, что он ожидает ("слушает") запросы связи на данном сокете. 
+            Без такой функции всякое требование связи с этим сокетом будет отвергнуто.
+
+        в моем случае: 
+            listen(server_fd, 5)
+
+        https://www.opennet.ru/docs/RUS/linux_base/node247.html#:~:text=Функция%20listen%20используется%20сервером%2C%20чтобы,int%20s%2C%20int%20backlog
+
+    accept
+        int accept(int s, char * name, int* anamelen)
+            s - сокет-дескриптор для принятия связей от клиентов
+            name - указатель на адрес клиента (структура sockaddr) для соответствующего домена
+            anamelen - указатель на целое число - длину структуры адреса
+
+        Функция используется сервером для принятия связи на сокет. Сокет должен быть уже слушающим в момент вызова функции. 
+            Если сервер устанавливает связь с клиентом, то функция accept возвращает новый сокет-дескриптор, 
+            через который и происходит общение клиента с сервером.
+        Если сервер не интересуется адресом клиента, в качестве второго и третьего аргументов можно задать NULL-указатели.
+
+        в моем случае:
+            accept(server_fd, (struct sockaddr*)&client_addr, &client_len)
+
+        https://opennet.ru/docs/RUS/linux_base/node248.html#:~:text=Эта%20функция%20используется%20сервером%20для,происходит%20общение%20клиента%20с%20сервером
+
+    pthread_create
+        int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void*), void *arg);
+            *thread - указатель на объект pthread_t, который инициализируется.
+            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t. Если атрибуты не нужны, можно передать NULL.
+            *start_routine - указатель на функцию, которая запускается в потоке. Подобная функция должна принимать в качестве параметра 
+                указатель void*, вместо которого можно передать указатель на любой объект. Однако допускается только один аргумент. 
+                Соответственно если надо передать несколько значений, то можно оформить их в массив или структуру.
+            *arg: указатель void*, через который передается значение в запускаемую функцию.
+        
+        создает новый поток, с атрибутами, заданными в attr, и запускает в нем функцию start_routine с аргументом arg.
+
+        в моем случае: 
+            pthread_create(&tid, NULL, handle_connection, data)
+
+        https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_create.html
+        https://metanit.com/c/tutorial/11.1.php
+
+    pthread_detach
+        int pthread_detach(pthread_t thread);
+            thread - идентификатор потока, который необходимо отделить (перевести в состояние "detached"). 
+                Его можно получить с помощью pthread_create() или pthread_self().
+        
+        переводит поток в detached‑состояние: после его завершения ОС сразу освобождает все внутренние 
+            ресурсы этого потока, и уже нельзя вызвать pthread_join для этого потока.
+
+        в моем случае:
+            pthread_detach(tid);
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_detach.html
+        https://www.opennet.ru/man.shtml?topic=pthread_detach&category=3&russian=2
+
+    strstr
+        char *strstr(const char *str1, const char *str2)
+            str1 - строка, в которой осуществляется поиск
+            str2 - строка, которая ищется в str1
+            
+        в моем случае: 
+            char* host_start = strstr(buffer, "Host: ");
+
+        возвращает указатель на первое вхождение в строку, на которую указывает str1, строки, указанной str2 
+            (исключая завершающий нулевой символ). Если совпадений не обна­ружено, возвращается NULL.
+
+        https://www.c-cpp.ru/content/strstr-fstrstr
+
+    strncpy
+        char *strncpy(char *dest, const char *source, size_t count)
+            dest - указатель на буфер, в который будет скопирована строка
+            source - указатель на буфер, из которого будет скопирована строка
+            count - максимальное количество символов, которое будет скопировано
+
+        в моем случае:
+            strncpy(host, host_start, host_len);
+
+        копирование до count символов содержимого строки, на которую указывает source, в строку, на которую 
+            указывает dest. Аргумент source должен быть указателем на строку, оканчивающуюся нулевым символом. 
+            Функция strncpy() возвращает указа­тель на dest.
+
+        https://www.c-cpp.ru/content/strncpy-fstrncpy
+
+    strchr
+        char *strchr(const char *str, int ch)
+            str - указатель на строку, в которой осуществляется поиск
+            ch - искомый символ
+
+        в моем случае:
+            char* port_ptr = strchr(host, ':');
+
+        возвращает указатель на первое вхождение символа ch в строку, на которую указывает str. 
+            Если символ ch не найден, возвращается NULL. 
+        
+        https://www.c-cpp.ru/content/strchr-fstrchr
+
+    gethostbyname
+        struct hostent *gethostbyname(const char *name);
+            name - имя интернет-хоста, запись которого требуется найти
+
+        в моем случае: 
+            struct hostent* server = gethostbyname(host);
+
+        возвращает указатель на структуру struct hostent, описывающую Интернет-хост. Эта структура содержит 
+            либо информацию, полученную от сервера имен, либо отдельные поля из строки в /etc/hosts.
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibsocket%2Fg%2Fgethostbyname.html
+
+    connect
+        int connect(int s, const struct sockaddr *name, socklen_t namelen);
+            s - дескриптор сокета, к которому следует инициализировать соединение
+            name - имя сокета, к которому нужно подключиться для соединения SOCK_STREAM
+            namelen - длина имени name, в байтах
+
+        в моем случае:
+            connect(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr))
+
+        устанавливает соединение в соответствии с типом сокета, указанным в s:
+            SOCK_STREAM - этот вызов пытается установить соединение с другим сокетом. Другой сокет определяется 
+                именем name, которое является адресом в коммуникационном пространстве этого сокета. Каждое 
+                коммуникационное пространство интерпретирует name по-своему.
+            SOCK_DGRAM - задает одноранговый узел, с которым должен быть связан сокет. Это тот адрес, на который 
+                должны отправляться датаграммы, и единственный, с которого должны приниматься датаграммы.
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibsocket%2Fg%2Fgethostbyname.html
+
+    read
+        ssize_t read(int fildes, void *buf, size_t nbyte);
+            fildes - дескриптор файла, из которого требуется считать информацию
+            buf - указатель на буфер, в который будут записаны данные
+            nbyte - количество байтов, которые требуется прочитать
+
+        в моем случае:
+            ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
+
+        пытается прочитать nbyte байт из файла, связанного с дескриптором открытого файла fildes, 
+            в буфер, на который указывает buf.
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibsocket%2Fg%2Fgethostbyname.html
+
+    write
+        ssize_t write(int fildes, const void *buf, size_t nbytes);
+            fildes - дескриптор файла, в который требуется записать информацию
+            buf - указатель на буфер, из которого требуется записать данные
+            nbytes - количество байтов, которые требуется записать
+
+        в моем случае:
+            // пересылка запроса на конечный сервер
+            write(server_fd, buffer, bytes_read);
+
+        записывает nbytes байт в файл, дескриптор которого передан в fildes, из области памяти, 
+            указатель на которую передан в buf.
+
+        https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibsocket%2Fg%2Fgethostbyname.html
+
+    main() 1 в 1 из lab7task2 из прошлого семестра. Смотри здесь: https://github.com/MarkusMagpie/NSU_labs_OS_4-semester/blob/master/lab7/labreport.txt
+
+    последовательность дейсвтий функции handle_connection(void* arg):
+        1) чтение строки HTTP-запроса и заголовков из сокета клиента в буфер
+        2) ищу в буфере начало заголовка "Host: "
+        3) определяю начало имени хоста и конец строки хоста \r\n. По этим параметрам копирую имя хоста в буфер host
+        4) преобразую доменное имя в IP-адрес через gethostbyname()
+        
+        5) создаю сокет для целевого сервера
+        6) установка соединения с целевым сервером через connect()
+        7) пересылка запроса на конечный сервер через write()
+
+        8) теперь циклическое чтение ответа от целевого сервера (read()) и его пересылка в сокет клиента (write())
+
+        9) закрытие сокетов целевого сервера и клиента

@@ -51,6 +51,9 @@ void* handle_connection(void* arg) {
     char host[256];
     int port = 80;
     int host_len = host_end - host_start;
+    if (host_len > sizeof(host) - 1) {
+        host_len = sizeof(host) - 1;
+    }
     strncpy(host, host_start, host_len); // копирую до host_len символов из host_start в host
     host[host_len] = '\0';
 

@@ -37,7 +37,6 @@
             ...
             ?) получает ответ от целевого сервера и пересылает его обратно.
 
-
     как запускать: 
         1 терминал: 
             gcc -o proxy proxy_nocache.c && sudo ./proxy
@@ -284,3 +283,26 @@
         8) теперь циклическое чтение ответа от целевого сервера (read()) и его пересылка в сокет клиента (write())
 
         9) закрытие сокетов целевого сервера и клиента
+
+    ?   почему запуск сервер, клиент, завершение сервер, клиент вызывал bind failed?
+    -   после завершения сервера порт какое-то время остается в состоянии TIME_WAIT. 
+            Это поведение TCP для гарантии корректного завершения соединения.
+
+        добавил в server.c следующее: 
+            int opt = 1;
+            if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+                printf("setsockopt failed");
+                close(server_fd);
+                exit(EXIT_FAILURE);
+            } 
+        SO_REUSEADDR позволяет переиспользовать порт сразу после завершения сервера. даже если он в состоянии TIME_WAIT
+
+        SOL_SOCKET - уровень на котором работает опция SO_REUSEADDR. работаем с опциями уровня сокета (не конкретно для какого-то протокола)
+
+        можно показать: 
+            sudo lsof -i :5000
+
+        какие есть состояния портов: https://ip-calculator.ru/blog/ask/chto-za-sostoyaniya-close_wait-i-time_wait/
+        хороший ответ: https://superuser.com/questions/173535/what-are-close-wait-and-time-wait-states
+
+        https://learn.microsoft.com/ru-ru/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse

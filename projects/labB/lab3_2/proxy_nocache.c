@@ -67,6 +67,7 @@ void* handle_connection(void* arg) {
         return NULL;
     }
 
+    // создаю TCP сокет для соединения с конечным сервером
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
         close(client_fd);

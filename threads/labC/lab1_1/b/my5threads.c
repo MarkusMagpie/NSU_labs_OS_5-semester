@@ -33,11 +33,11 @@ int main() {
         }
     }
 
-    // ожидаем завершения потоков
+    // жду завершения всех пяти потоков
     for (int i = 0; i < NUM_THREADS; i++) {
         pthread_join(tids[i], NULL);
     }
 
-    printf("все %d потоков завершили работу\n", NUM_THREADS);
+    printf("[main] все 5 потоков завершили работу (pthread_join() пройден для каждого)\n");
     return EXIT_SUCCESS;
 }

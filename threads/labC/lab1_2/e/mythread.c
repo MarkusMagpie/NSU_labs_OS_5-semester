@@ -11,7 +11,7 @@ void* func(void* arg) {
     pthread_t tid = pthread_self();
     printf("[func] pthread_self() = %lu\n", (unsigned long)tid);
 
-    // НОВОЕ: переводим поток в detached состояние, чтобы он сам освободил свои ресурсы после завершения
+    // НОВОЕ: перевожу поток в detached состояние, чтобы он сам освободил свои ресурсы после завершения
     pthread_detach(tid);
 
     return NULL;

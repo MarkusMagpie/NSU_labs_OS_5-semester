@@ -17,7 +17,7 @@ int main() {
     pthread_attr_t attr;
     int err;
 
-    // инициализируем атрибуты, задаём detached-состояние
+    // инициализирую атрибуты, задаю detached-состояние
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 

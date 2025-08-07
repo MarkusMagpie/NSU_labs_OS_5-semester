@@ -118,8 +118,11 @@ d. Напишите программу, которая в бесконечном
     Zombie thread - joinable thread which has terminated, but which hasn't been joined. 
         Normally, either a thread should be joined at some time, or it should be detached. 
         Otherwise, the OS maintains its state for some possible future join, which takes resources. 
-        Именно поэтому и читаю сообщение: Resource temporarily unavailable.
+    Именно поэтому и читаю сообщение: Resource temporarily unavailable.
+    
     ответ взял здесь: https://stackoverflow.com/questions/6984576/zombie-threads-on-posix-systems
+
+    Про Thread Control Block (TCB) - аналог PCB смотри здесь: https://www.geeksforgeeks.org/operating-systems/thread-control-block-in-operating-system/
 
     
 
@@ -129,8 +132,8 @@ e. Добавьте вызов pthread_detach() в поточную функци
         cd ../e
         gcc mythread.c -o thread && ./thread
     теперь вижу что в выводе tid не падают, как это было в предыдущем пункте d. 
-    Благодаря pthread_detach() внутренние ресурсы потоков автоматически выпускаются 
-        обратно в систему без необходимости join()-а другого потока с этим завершенным потоком.
+    Благодаря pthread_detach() внутренние ресурсы потоков автоматически освобождаются 
+        без необходимости join()-а другого потока с этим завершенным потоком.
 
     pthread_detach
         int pthread_detach(pthread_t thread);
@@ -160,20 +163,20 @@ f. Вместо вызова pthread_detach() передайте в pthread_crea
     
     pthread_attr_init
         int pthread_attr_init(pthread_attr_t *attr);
-            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t.
+            *attr - указатель на набор атрибутов потока.
         
         создает объект pthread_attr_t attr, где каждому атрибуту задается значение по умолчанию.
 
         в моем случае: 
             pthread_attr_init(&attr);
 
-        https://www.opennet.ru/man.shtml?topic=pthread_attr_init&category=3&russian=4
+        https://www.opennet.ru/man.shtml?topic=pthread_attr_init&category=3&russian=2
 
     pthread_attr_setdetachstate
         int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate);
-            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t.
+            *attr - указатель на набор атрибутов потока.
             detachstate - тип атрибутов потока, который задаем. Возможные значения: 
-                1) PTHREAD_CREATE_JOINABLE (default) 0 поток создаётся joinable, т.е. 
+                1) PTHREAD_CREATE_JOINABLE (default) - поток создаётся joinable, т.е. 
                     требует вызова pthread_join() для освобождения ресурсов.
                 2) PTHREAD_CREATE_DETACHED - поток создаётся detached, т.е. сам 
                     освобождает свои ресурсы при завершении.
@@ -187,7 +190,7 @@ f. Вместо вызова pthread_detach() передайте в pthread_crea
 
     pthread_attr_destroy
         int pthread_attr_destroy(pthread_attr_t *attr);
-            *attr - указатель на набор атрибутов потока в виде объекта pthread_attr_t.
+            *attr - указатель на набор атрибутов потока.
 
         удаляет объект pthread_attr_t attr.
         Removes the definition of the thread attributes object. An error results if a 

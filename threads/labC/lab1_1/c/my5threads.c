@@ -10,7 +10,7 @@
 
 #define NUM_THREADS 5
 
-int global_var = 40; // глобальная переменная
+int global_var = 40;
 
 void *mythread(void *arg) {
     int id = *(int *)arg;
@@ -24,10 +24,11 @@ void *mythread(void *arg) {
     static int local_static_var = 100;
     const int local_const_var = 200;
 
-    printf("[mythread %d] pid=%d, ppid=%d, pthread_self()=%lu, gettid()=%d\n", id, pid, ppid, self, tid);
-    
     // сравнение идентификаторов, полученных через: pthread_self() и сохранённого, который получил при pthread_create()
     extern pthread_t tids[NUM_THREADS];
+
+    printf("[mythread %d] pid=%d, ppid=%d, pthread_self()=%lu, tids[%d]=%lu, gettid()=%d\n", id, pid, ppid, (unsigned long)self, id-1, (unsigned long)tids[id-1], tid);
+
     printf("[mythread %d] pthread_equal(self, tids[%d]) = %d\n", id, id-1, pthread_equal(self, tids[id-1]));
 
     // адреса переменных

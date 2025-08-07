@@ -19,7 +19,7 @@ int main() {
     printf("main [%d %d %d]: Hello from main!\n", getpid(), getppid(), gettid());
 
     err = pthread_create(&tid, NULL, mythread, NULL);
-    if (err) {
+    if (err != 0) {
         printf("main: pthread_create() failed: %s\n", strerror(err));
         return EXIT_FAILURE;
     }

@@ -32,7 +32,7 @@ a. Склонируйте репозиторий git@github.com:mrutman/os.git. 
             *start_routine - указатель на функцию, которая запускается в потоке. Подобная функция должна принимать в качестве параметра 
                 указатель void*, вместо которого можно передать указатель на любой объект. Однако допускается только один аргумент. 
                 Соответственно если надо передать несколько значений, то можно оформить их в массив или структуру.
-            *arg: указатель void*, через который передается значение в запускаемую функцию.
+            *arg - указатель void*, через который передается значение в запускаемую функцию.
         
         создает новый поток, с атрибутами, заданными в attr, и запускает в нем функцию start_routine с аргументом arg.
 
@@ -47,7 +47,7 @@ a. Склонируйте репозиторий git@github.com:mrutman/os.git. 
             thread - идентификатор потока, который должен завершиться.
             *value_ptr - указатель на переменную, в которую будет записан результат выполнения потока.
 
-        переводит текущий поток (объект pthread_t) в состояние ожидания, пока не завершится другой поток. 
+        переводит поток в котором она была вызвана в состояние ожидания, пока не завершится поток thread. 
 
         в моем случае: 
             pthread_join(tid, NULL);
@@ -111,41 +111,43 @@ c. В поточной функции распечатайте:
         cd ../c
         gcc my5threads.c -o thread && ./thread
     вывод:
-        [main] pid=19618, ppid=9889, pthread_self()=137807034980160, gettid()=19618
-        [mythread 1] pid=19618, ppid=9889, pthread_self()=137807028815552, gettid()=19619
+        [main] pid=9095, ppid=3116, pthread_self()=132427414751040, gettid()=9095
+        [mythread 1] pid=9095, ppid=3116, pthread_self()=132427410310848, tids[0]=132427410310848, gettid()=9096
         [mythread 1] pthread_equal(self, tids[0]) = 1
-        [mythread 1] &local_var = 0x7d55b2fffe98
-        [mythread 1] &local_static_var = 0x614682b3b014
-        [mythread 1] &local_const_var = 0x7d55b2fffe9c
-        [mythread 1] &global_var = 0x614682b3b010
-        
-        [mythread 2] pid=19618, ppid=9889, pthread_self()=137807018329792, gettid()=19620
+        [mythread 1] &local_var = 0x787128bffe98
+        [mythread 1] &local_static_var = 0x55824632b014
+        [mythread 1] &local_const_var = 0x787128bffe9c
+        [mythread 1] &global_var = 0x55824632b010
+
+        [mythread 2] pid=9095, ppid=3116, pthread_self()=132427399825088, tids[1]=132427399825088, gettid()=9097
         [mythread 2] pthread_equal(self, tids[1]) = 1
-        [mythread 2] &local_var = 0x7d55b25ffe98
-        [mythread 2] &local_static_var = 0x614682b3b014
-        [mythread 2] &local_const_var = 0x7d55b25ffe9c
-        [mythread 2] &global_var = 0x614682b3b010
-        
-        [mythread 3] pid=19618, ppid=9889, pthread_self()=137807007844032, gettid()=19621
-        [mythread 3] pthread_equal(self, tids[2]) = 1
-        [mythread 3] &local_var = 0x7d55b1bffe98
-        [mythread 3] &local_static_var = 0x614682b3b014
-        [mythread 3] &local_const_var = 0x7d55b1bffe9c
-        [mythread 3] &global_var = 0x614682b3b010
-        
-        [mythread 4] pid=19618, ppid=9889, pthread_self()=137806997358272, gettid()=19622
+        [mythread 2] &local_var = 0x7871281ffe98
+        [mythread 2] &local_static_var = 0x55824632b014
+        [mythread 2] &local_const_var = 0x7871281ffe9c
+        [mythread 2] &global_var = 0x55824632b010
+
+        [mythread 4] pid=9095, ppid=3116, pthread_self()=132427378853568, tids[3]=132427378853568, gettid()=9099
         [mythread 4] pthread_equal(self, tids[3]) = 1
-        [mythread 4] &local_var = 0x7d55b11ffe98
-        [mythread 4] &local_static_var = 0x614682b3b014
-        [mythread 4] &local_const_var = 0x7d55b11ffe9c
-        [mythread 4] &global_var = 0x614682b3b010
-        
-        [mythread 5] pid=19618, ppid=9889, pthread_self()=137806986872512, gettid()=19623
+        [mythread 4] &local_var = 0x787126dffe98
+        [mythread 4] &local_static_var = 0x55824632b014
+        [mythread 4] &local_const_var = 0x787126dffe9c
+        [mythread 4] &global_var = 0x55824632b010
+
+        [mythread 3] pid=9095, ppid=3116, pthread_self()=132427389339328, tids[2]=132427389339328, gettid()=9098
+        [mythread 3] pthread_equal(self, tids[2]) = 1
+        [mythread 3] &local_var = 0x7871277ffe98
+        [mythread 3] &local_static_var = 0x55824632b014
+        [mythread 3] &local_const_var = 0x7871277ffe9c
+        [mythread 3] &global_var = 0x55824632b010
+
+        [mythread 5] pid=9095, ppid=3116, pthread_self()=132427368367808, tids[4]=132427368367808, gettid()=9100
         [mythread 5] pthread_equal(self, tids[4]) = 1
-        [mythread 5] &local_var = 0x7d55b07ffe98
-        [mythread 5] &local_static_var = 0x614682b3b014
-        [mythread 5] &local_const_var = 0x7d55b07ffe9c
-        [mythread 5] &global_var = 0x614682b3b010
+        [mythread 5] &local_var = 0x7871263ffe98
+        [mythread 5] &local_static_var = 0x55824632b014
+        [mythread 5] &local_const_var = 0x7871263ffe9c
+        [mythread 5] &global_var = 0x55824632b010
+
+        [main] все 5 потоков завершили работу (pthread_join() пройден для каждого)
 
     pthread_self
         pthread_t pthread_self(void);
@@ -178,7 +180,8 @@ c. В поточной функции распечатайте:
     - При создании потока еще в main-е с помощью pthread_create(), я сохраняю его POSIX-идентификатор в первом 
         аргументе (pthread_create(&tids[i], ...)). Уже внутри потока mythread, я вызываю pthread_self(), чтобы
         узнать этот же POSIX-идентификатор. А gettid() возвращает возвращает идентификатор потока, назначенный kernel, 
-        а не POSIX-идентификатор.
+        котооруй уникален не просто для процесса, а для всей системы. 
+        Прочитай это перед ответом: https://stackoverflow.com/questions/16610332/difference-between-the-value-returned-by-pthread-self-and-gettid?rq=3
 
         отсюда: https://clanguagestuff.blogspot.com/2013/08/gettid-vs-pthreadself.html
         the difference between gettid() and the pthread_self() is:
@@ -229,7 +232,7 @@ c. В поточной функции распечатайте:
         d означает локальный символ данных, переменная имеет внутреннее связывание (видна только в этом объектном файле). 
         static -> internal; extern -> external
 
-        static_var.0 - компилятор помечает такие переменные как локальные символы, потому что их область видимости 
+        local_static_var.0 - компилятор помечает такие переменные как локальные символы, потому что их область видимости 
             ограничена функцией/файлом.
     
 

@@ -17,7 +17,7 @@ void *func(void *arg) {
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 
-    // НОВОЕ: выделяем память для hello world
+    // НОВОЕ: выделяю память для "hello world"
     char *msg = malloc(12);
     if (!msg) {
         printf("[func] malloc() failed");
@@ -25,16 +25,16 @@ void *func(void *arg) {
     }
     strcpy(msg, "hello world");
 
-    // регистрируем обработчик очистки
+    // регистрирую обработчик очистки
     pthread_cleanup_push(cleanup_handler, msg);
 
     // распечатываю в бесконечном цикле полученную строку.
     while (1) {
         printf("[func] %s\n", msg);
-        sleep(1); // точка отмены!
+        sleep(1); // точка отмены, сработает через 3 секунды благодвря вызову pthread_cancel() в main()
     }
 
-    // снимаем обработчик очистки - вызывается при завершении потока
+    // снимаю обработчик очистки - вызывается при завершении потока
     pthread_cleanup_pop(1);
 
     return NULL;
@@ -52,14 +52,15 @@ int main() {
 
     sleep(3);
 
-    // запрашиваем отмену потока
+    // запрашиваю отмену потока
+    // НОВОЕ: при отмене потока вызывается cleanup_handler
     printf("[main] canceling func thread...\n");
     if (pthread_cancel(tid) != 0) {
         printf("[main] pthread_cancel() failed: %s\n", strerror(err));
         return EXIT_FAILURE;
     }
 
-    // ждём завершения потока и проверяем причину 
+    // жду завершения потока и проверяю причину 
     void* retval;
     pthread_join(tid, &retval);
     if (retval == PTHREAD_CANCELED) {

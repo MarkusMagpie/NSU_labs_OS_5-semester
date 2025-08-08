@@ -10,13 +10,15 @@
 void* func(void* arg) {
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
-    // 1 способ завершить поток
+    // ниже прдеставлены два способа завершения потока. Выбери один:
+
+    // 1)
     // pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
     int counter = 0;
     while (1) {
         ++counter;
-        // 2 способ завершить поток
+        // 2)
         // pthread_testcancel();
     }
 
@@ -35,14 +37,14 @@ int main() {
 
     sleep(3);
 
-    // запрашиваем отмену потока
+    // запрашиваю отмену потока
     printf("[main] canceling func thread...\n");
     if (pthread_cancel(tid) != 0) {
         printf("[main] pthread_cancel() failed: %s\n", strerror(err));
         return EXIT_FAILURE;
     }
 
-    // ждём завершения потока и проверяем причину 
+    // жду завершения потока и проверяю причину 
     void* retval;
     pthread_join(tid, &retval);
     if (retval == PTHREAD_CANCELED) {

@@ -8,7 +8,7 @@
 #include <stdlib.h>
 
 void* func(void* arg) {
-    // разрешаем отмену и устанавливаем отложенный тип (дефолтные значения)
+    // разрешаю отмену и устанавливаем отложенный тип (дефолтные значения)
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 
@@ -34,14 +34,14 @@ int main() {
     // func работает несколько секунд
     sleep(3);
 
-    // запрашиваем отмену потока
+    // запрашиваю отмену потока
     printf("[main] canceling func thread...\n");
     if (pthread_cancel(tid) != 0) {
         printf("[main] pthread_cancel() failed: %s\n", strerror(err));
         return EXIT_FAILURE;
     }
 
-    // ждём завершения потока и проверяем причину 
+    // жду завершения потока и проверяю причину 
     void* retval;
     pthread_join(tid, &retval);
     if (retval == PTHREAD_CANCELED) {

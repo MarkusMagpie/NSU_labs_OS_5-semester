@@ -4,8 +4,6 @@
     Функция должна возвращать успех-неуспех.
     Оформите реализацию в виде библиотеки.
 
-
-
     в терминале выполняю: 
         gcc -shared -o libmythread.so mythread.c
         gcc -o test test.c -L. -lmythread

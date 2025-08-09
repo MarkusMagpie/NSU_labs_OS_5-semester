@@ -4,16 +4,19 @@
 
 static int thread_startup(void *arg) {
     mythread_struct_t *ts = (mythread_struct_t *)arg;
-    // сохраняем контекст перед запуском start_routine в поле before_start_routine
+    // сохраняю контекст перед запуском start_routine в поле before_start_routine
     if (getcontext(&ts->before_start_routine) == -1) {
         _exit(1);
     }
-    // если поток не был отменен, то запускаем start_routine
+
+    // если поток не был отменен, то запускаю start_routine
     if (!ts->canceled) {
         ts->retval = ts->start_routine(ts->arg);
     }
+
     ts->finished = 1;
-    // жидем, пока кто-нибудь вызовет join
+    
+    // жиду пока кто-нибудь вызовет join
     while (!ts->joined) {
         sleep(1);
     }
@@ -23,13 +26,15 @@ static int thread_startup(void *arg) {
 
 // int pthread_join(pthread_t thread, void **value_ptr);
 int mythread_join(mythread_t thread, void **retval) {
-    // храним указатель на структуру по TID
+    // храню указатель на структуру по TID
     // thread - адрес структуры
     mythread_struct_t *ts = thread;
+
     // жду завершения потока от thread_startup()
     while (!ts->finished) {
         sleep(1);
     }
+
     // установил значение, которое возвращает start_routine, в retval
     if (retval) *retval = ts->retval;
     ts->joined = 1;

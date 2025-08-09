@@ -28,14 +28,15 @@
         uthread.c
             разберем все глобальные статик переменные:
                 static ucontext_t ucontexts[UTHREAD_MAX];
-                    массив для хранения контекстов для юзер потоков.
-                static void *uargs[UTHREAD_MAX];
-                    массив указателей на аргументы, которые юзер передавал в uthread_create().
-                static void *(*ufuncs[UTHREAD_MAX])(void *);
-                    массив указателей на сами юзер функции start_routine().
+                    массив контекстов юзер потоков
                 static char ustacks[UTHREAD_MAX][UTHREAD_STACK_SIZE];
-                    выдеренные для каждого потока "стек". Заранее резервируем UTHREAD_MAX 
-                    стеков - по одному на каждый поток, каждый размером UTHREAD_STACK_SIZE.
+                    массив выделенных для каждого потока "стеков". Заранее резервируюм UTHREAD_MAX 
+                    стеков - по одному на каждый поток, каждый размером UTHREAD_STACK_SIZE
+                static void *(*ufuncs[UTHREAD_MAX])(void *);
+                    массив указателей на сами юзер функции start_routine()
+                static void *uargs[UTHREAD_MAX];
+                    массив указателей на аргументы, которые юзер передавал в uthread_create()
+
                 static int ucount = 0;
                     счетчик созданных юзер потоков. При каждом успешном вызове uthread_create() 
                     инкременируется.
@@ -45,32 +46,32 @@
                     ввызвать setcontext() без предварительного swapcontext().
 
             uthread_create(uthread_t *thread, void *(*start_routine)(void *), void *arg)
-                если ucount >= UTHREAD_MAX, то возвращаем -1:
+                если создано юзер потоков больше чем UTHREAD_MAX, то возвращаю -1:
                     if (ucount >= UTHREAD_MAX) {
                         return -1;
                     }
                 текущий счетчик созданных потоков - ucount становится id нового юзер потока. 
                     getcontext() заполняет структуру ucontexts[id] контекстом текущего юзер потока: 
-                    регистры, флаги, маски сигналов: 
+                    регистры, маски сигналов, ...: 
                     int id = ucount++;
                     if (getcontext(&ucontexts[id]) == -1) {
                         return -1;
                     }
-                модифицируем этот контекст дабы превратить в стартовую точку нового юзер потока:
+                модифицирую этот контекст дабы превратить в стартовую точку нового юзер потока:
                     uc_link - указывает куда вернуться после завершения контекста. NULL значит 
                     никуда не возвращаться;
-                    uc_stack.ss_sp - адрес начала (нижняя вершина) стека, который мы заранее 
-                    выделили в статическом массиве ustacks[id];
+                    uc_stack.ss_sp - адрес начала (нижняя вершина) стека, который заранее 
+                    выделен в статическом массиве ustacks[id];
                     uc_stack.ss_size - размер стека.
                     ucontexts[id].uc_link = NULL;
                     ucontexts[id].uc_stack.ss_sp = ustacks[id];
                     ucontexts[id].uc_stack.ss_size = UTHREAD_STACK_SIZE;
-                юзер функцию и её аргумент сохраняем в массивах ufuncs и uargs, чтобы в момент запуска потока 
-                    (в uthread_wrapper) знать, что именно вызывать:
+                юзер функцию и её аргумент сохраняю в массивах ufuncs и uargs, чтобы в момент запуска потока 
+                    в uthread_wrapper() знать, что именно вызывать:
                     ufuncs[id] = start_routine;
                     uargs[id] = arg;
-                модифицируем ucontexts[id] так, что при первом setcontext() или swapcontext() управление начнёт 
-                выполняться не с текущего места, а с функции uthread_wrapper():
+                модифицирую ucontexts[id] так, что при первом setcontext() или swapcontext() управление начнёт 
+                    выполняться не с текущего места, а с функции uthread_wrapper():
                     makecontext(&ucontexts[id], uthread_wrapper, 0);
                 дескриптор потока - взятый из ucount id:
                     *thread = id;
@@ -82,15 +83,15 @@
                     переключении контекстов управление возвращалось в uthread_wrapper().
 
             static void uthread_wrapper(void) 
-                точка входа в каждый ваш юзер поток после переключения контекста. 
+                точка входа в каждый юзер поток после переключения контекста. 
 
                 беру глобальную переменную current - индекс текущего юзер потока:
                     int id = current;
-                берём из массива ufuncs указатель на start_routine, и вызываем его, передавая аргумент uargs[id]. 
-                    Возвращённое значение сохраняем в локальной переменной ret:
+                беру из массива ufuncs указатель на start_routine, и вызываю его, передавая аргумент uargs[id]. 
+                    Возвращённое значение сохраняю в локальной переменной ret:
                     void *ret = ufuncs[id](uargs[id]);
-                Как только start_routine вернула управление, делаем uthread_yield(), чтобы передать управление 
-                    следующему потоку. Если бы этой строки не было, то застряли бы в одном потоке:
+                Как только start_routine вернула управление, делаю uthread_yield(), чтобы передать управление 
+                    следующему потоку. Если бы этой строки не было, то застрял бы в одном потоке:
                     uthread_yield();
                 Если после uthread_yield() снова вернулись именно в эту функцию (ucount == 1 или все другие потоки 
                     завершились), значит все потоки отработали и uthread_yield() больше не может передать управление 
@@ -100,28 +101,29 @@
             void uthread_yield(void) 
                 функция передачи управления от текущего потока к следующему.
 
-                проверяем создавали ли мы вообще юзер потоки:
+                проверяю создавали ли мы вообще юзер потоки:
                     if (ucount == 0) {
                         return;
                     }
                 сохраняю старый индекс в prev, инкременирую current по модулю общего числа потоков ucount:
                     int prev = current;
                     current = (current + 1) % ucount;
-                при первом вызове юзер потока, когда ещё ни разу не было выполнено переключение, у нас еще ни один 
-                    контекст впринципе не сохранен. Вызываем setcontext() для исполнения контекста потока с номером 
-                    current. Сохранения контекста не происходит.
-                    В другом случае сначала сохраняем контекст текущего "старого" потока, а затем восстанавливаю 
-                    контекст "нового" потока ucontexts[current]. Т.е. переключили исполнение из одного потока в другой:
+                далее раньше было так. И это вполне логично ибо при первом вызове юзер потока, когда ещё ни разу не 
+                    было выполнено переключение, еще ни один контекст впринципе не сохранен. Вызываю setcontext() 
+                    для исполнения контекста потока с номером current. Сохранения контекста не происходит.
+                    В другом случае сначала сохраняю контекст текущего "старого" потока, а затем восстанавливаю 
+                    контекст "нового" потока ucontexts[current]. Т.е. переключил исполнение из одного потока в другой: 
                     if (prev == -1) {
                         setcontext(&ucontexts[current]);
                     } else {
                         swapcontext(&ucontexts[prev], &ucontexts[current]);
                     }
+                НО сейчас оставил только swapcontext(&ucontexts[prev], &ucontexts[current]) так как prev никогда не равен -1.
 
             void uthread_run(void)
-                запусскаем первый юзер поток. 
+                запусскаею первый юзер поток. 
                     current = 0;
-                восстанавливаем сохранённый контекст потока current: загружаем его регистры(sp, ip - указывает на 
+                восстанавливаю сохранённый контекст потока current: загружаю его регистры(sp, ip - указывает на 
                     uthread_wrapper()):
                     setcontext(&ucontexts[current]);
                 ! После этого main уже не продолжит исполнение (ее контекст не был сохранён), и юзер потоки начнут 
@@ -130,47 +132,9 @@
 
 
             4 функции ниже позволяют переключать на уровне юзера контекст между различными потоками в рамках одного процесса:
-                makecontext()
-                    void makecontext(ucontext_t *ucp, void *func(), int argc, ...);
-                        ucp - указатель на структуру контекста ucontext_t, которая будет модифицириована
-                        func() - указатель на функцию, которая будет исполняться в контексте
-                        argc - количество параметров у функции func()
-
-                    Функция makecontext() изменяет контекст, на который указывает ucp (полученный с помощью вызова getcontext()). 
-                        Перед вызовом makecontext() необходимо выделить для этого контекста новый стек, указав его в ucp->uc_stack, 
-                        и определить контекст наследника, указав его в ucp->uc_link. В дальнейшем, когда этот контекст активируется 
-                        (с помощью setcontext() или swapcontext()), то сперва вызвается функция func с аргументами, указанными за argc 
-                        (при этом argc должен содержать количество этих аргументами), а затем, после возврата из этой функции, 
-                        активируется контекст наследника. Если указатель на контекст наследника равен NULL, то подпроцесс выходит.
-
-                    в моем случае: 
-                        makecontext(&ucontexts[id], uthread_wrapper, 0);
-                    
-                    https://www.opennet.ru/man.shtml?topic=makecontext&category=3&russian=0
-                    https://pubs.opengroup.org/onlinepubs/009695399/functions/makecontext.html
-                
-                getcontext()
-                    int getcontext(ucontext_t *ucp);
-                        ucp - указатель на структуру ucontext_t, в которую сохраняем контекст текущего потока. 
-                        Пример этой структуры контекста ucontext:
-                        typedef struct ucontext {
-                            struct ucontext *uc_link;
-                            sigset_t uc_sigmask;
-                            stack_t uc_stack;
-                            mcontext_t uc_mcontext;
-                            ...
-                        } ucontext_t;
-
-                    Функция getcontext() инициализирует вышеописанную структуру, указывая через ucp на текущий активный контекст.
-
-                    в моем случае:
-                        getcontext(&ucontexts[id])
-
-                    https://www.opennet.ru/man.shtml?topic=getcontext&category=2&russian=0
-
                 setcontext()
                     int setcontext(const ucontext_t *ucp); 
-                        ucp - указатель на структуру контекста ucontext_t, которая будет восстанавливаться
+                        ucp - указатель на структуру контекста ucontext_t, который будет восстанавливаться
 
                     Функция setcontext() восстанавливает пользовательский контекст, на который указывает ucp (и 
                     переносит туда выполнение). 
@@ -178,18 +142,62 @@
                     getcontext() или makecontext(), или передан как третий аргумент обработчика сигнала.
 
                     ? что подразумевается под восстановлением контекста?
-                    - восстановление регистров(sp, ip, ...), масок сигналов, стека на тот который указан в ucp->uc_stack,
-                        переносит выполнение в то место, где при getcontext() или makecontext() был сохранён контекст.
+                    - восстановка регистров(sp, ip, ...), масок сигналов, стека на тот который указан в ucp->uc_stack,
+                        перенос выполнения в то место, где при getcontext() или makecontext() был сохранён контекст.
                         ! Это goto() на зафиксированный в структуре контекст. 
                         ! Если для данного контекста в uc_link указан другой контекст, то после завершения этого 
                             один раз выполнится setcontext для uc_link.
 
                     https://www.opennet.ru/man.shtml?topic=getcontext&category=2&russian=0
+                
+                getcontext()
+                    int getcontext(ucontext_t *ucp);
+                        ucp - указатель на структуру контекста, в которую сохранится контекст текущего юзер потока. 
+                        Пример этой структуры контекста ucontext:
+                        typedef struct ucontext {
+                            struct ucontext *uc_link;       points to the context that will be resumed when the current context terminates
+                            sigset_t uc_sigmask;            set of signals blocked in this context
+                            stack_t uc_stack;               stack used by current context
+                            mcontext_t uc_mcontext;         machine-specific representation of the saved context, that includes the calling 
+                                                                thread's machine registers.
+                            ...
+                        } ucontext_t;
+
+                    Функция getcontext() инициализирует структуру ucontext_t в которую сохранится текущий активный контекст.
+
+                    в моем случае:
+                        getcontext(&ucontexts[id])
+
+                    https://www.opennet.ru/man.shtml?topic=getcontext&category=2&russian=0
+                    https://man7.org/linux/man-pages/man2/setcontext.2.html
+
+                makecontext()
+                    void makecontext(ucontext_t *ucp, void *func(), int argc, ...);
+                        ucp - указатель на структуру контекста, которая будет модифицириована
+                        func() - указатель на функцию, которая будет исполняться в контексте
+                        argc - количество параметров у функции func()
+
+                    Функция makecontext() изменяет контекст, на который указывает ucp (полученный с помощью вызова getcontext()). 
+                        ! Перед вызовом makecontext() необходимо выделить для этого контекста новый стек, указав его в ucp->uc_stack, 
+                            и определить контекст наследника, указав его в ucp->uc_link (предложение взято из мэйна). 
+                        В дальнейшем, когда этот контекст активируется (с помощью setcontext() или swapcontext()), то сперва вызвается 
+                            функция func() с аргументами, указанными за argc, а после возврата из func(), активируется 
+                            контекст наследника (при условии что он не NULL, тогда просто возвращается).
+
+                    в моем случае:
+                        ucontexts[id].uc_link = NULL; 
+                        ucontexts[id].uc_stack.ss_sp = ustacks[id]; 
+                        ucontexts[id].uc_stack.ss_size = UTHREAD_STACK_SIZE;
+                        ...
+                        makecontext(&ucontexts[id], uthread_wrapper, 0);
+                    
+                    https://www.opennet.ru/man.shtml?topic=makecontext&category=3&russian=0
+                    https://pubs.opengroup.org/onlinepubs/009695399/functions/makecontext.html
 
                 swapcontext()
                     int swapcontext (ucontext_t *oucp, ucontext_t *ucp); 
-                        oucp - указатель на структуру контекста ucontext_t, в которую сохраняем контекст текущего потока
-                        ucp - указатель на структуру контекста ucontext_t, которая будет восстанавливаться
+                        oucp - указатель на структуру контекста, в которую сохраняется контекст текущего потока
+                        ucp - указатель на структуру контекста, которая будет восстанавливаться
 
                     Функция swapcontext() сохраняет текущий контекст в структуру, на которую указывает oucp, 
                         а затем активирует контекст, на который указывает ucp.

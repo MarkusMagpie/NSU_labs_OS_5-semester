@@ -164,8 +164,7 @@
 
                 перевожу arg(тот самый ts, что передал в clone) к указателю на нашу структуру с состоянием потока:
                     mythread_struct_t *ts = (mythread_struct_t *)arg;
-                getcontext сохраняет в ts->before_start_routine весь текущий процессорный контекст: регистры, 
-                    указатель стека, маску сигналов:
+                getcontext сохраняет в ts->before_start_routine весь текущий процессорный контекст: регистры, маску сигналов, ...:
                     if (getcontext(&ts->before_start_routine) == -1) {
                         _exit(1);
                     }

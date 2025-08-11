@@ -6,6 +6,8 @@
 
 // фоновый периодический вывод статистики очереди queue_t q
 void *qmonitor(void *arg) {
+	// pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL); // необязательно ибо ниже почти сразу есть printf() и sleep() - точки отмены
+	
 	queue_t *q = (queue_t *)arg;
 
 	printf("qmonitor: [%d %d %d]\n", getpid(), getppid(), gettid());
@@ -37,7 +39,7 @@ queue_t* queue_init(int max_count) {
 	q->add_count = q->get_count = 0;
 
 	err = pthread_create(&q->qmonitor_tid, NULL, qmonitor, q);
-	if (err) {
+	if (err != 0) {
 		printf("queue_init: pthread_create() failed: %s\n", strerror(err));
 		abort();
 	}

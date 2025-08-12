@@ -37,8 +37,8 @@ typedef struct _Queue {
 	// мьютекс вместо спинлока
     pthread_mutex_t lock;
 	//  НОВОЕ - семафоры
-	sem_t slots; // сколько ещё узлов можно добавить
-    sem_t items; // сколько узлов доступно для чтения
+	sem_t slots; // сколько ещё узлов еще можно добавить до max_count
+    sem_t items; // сколько узлов сейчас в очереди 
 } queue_t;
 
 queue_t* queue_init(int max_count);

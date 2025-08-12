@@ -100,7 +100,7 @@ int queue_add(queue_t *q, int val) {
 	q->add_count++;
 
 	pthread_mutex_unlock(&q->lock);
-	sem_post(&q->items); // НОВОЕ: сигнал читателю что в очереди появился ещё один узел
+	sem_post(&q->items); // НОВОЕ: сигнал reader()-у что в очереди появился ещё один узел
 	return 1;
 }
 

@@ -28,11 +28,11 @@ int main() {
 
     // ждём завершения потока
     err = pthread_join(tid, NULL);
-    if (err  != 0) {
+    if (err != 0) {
         printf("main: pthread_join() failed: %s\n", strerror(err));
         return EXIT_FAILURE;
     }
 
-    printf("[main] поток worker завершил работу\n");
+    printf("[main] главный поток вышел из ожидания потока worker и продолжил работу, так как тот завершил работу\n");
     return EXIT_SUCCESS;
 }

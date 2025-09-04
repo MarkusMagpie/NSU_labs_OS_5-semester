@@ -24,8 +24,9 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    // НОВОЕ: ожидаем завершения потока mythread
+    // НОВОЕ: ожидаю завершения потока mythread
     pthread_join(tid, NULL);
+    printf("поток main вышел из ожидания потока mythread и продолжил работу, так как тот завершил работу\n");
 
     return EXIT_SUCCESS;
 }

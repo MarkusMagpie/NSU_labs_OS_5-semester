@@ -22,6 +22,8 @@ void *mythread(void *arg) {
     // локальные переменные
     int local_var = 100;
 
+    printf("[mythread %d] pid=%d, addres of pid=%p\n", id, pid, &pid);
+
     printf("[mythread %d] before: local_var=%d, global_var=%d\n", id, local_var, global_var);
 
     local_var += 10;

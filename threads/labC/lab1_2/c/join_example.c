@@ -9,9 +9,14 @@
 
 void* worker(void* arg) {
     int id = *(int*)arg;
-    printf("[worker] поток %d запущен\n", id);
-    printf("[worker] поток %d завершил работу\n", id);
+    printf("[worker] поток %d запущен (10 сек sleep())\n", id);
+    sleep(10);
     char *msg = "hello world";
+    // Segmentation fault (core dumped) подтверждает что строка находится в памяти только для чтения
+    // msg[0] = 'H';
+    printf("[worker] msg string adress: %p\n", msg);
+    sleep(10);
+    printf("[worker] поток %d завершил работу\n", id);
     return (void*)msg;
 }
 
@@ -22,6 +27,7 @@ int main() {
     void* retval;
 
     printf("[main] создание потока\n");
+    printf("[main] cat /proc/%d/maps\n\n", getpid());
     err = pthread_create(&tid, NULL, worker, &arg);
     if (err != 0) {
         printf("main: pthread_create() failed: %s\n", strerror(err));

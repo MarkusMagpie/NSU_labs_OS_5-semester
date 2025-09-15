@@ -200,3 +200,54 @@ f. Вместо вызова pthread_detach() передайте в pthread_crea
             pthread_attr_destroy(&attr);
 
         https://www.ibm.com/docs/en/zos/2.4.0?topic=functions-pthread-attr-destroy-destroy-thread-attributes-object
+
+
+
++ почему в c локальная переменная лежит не на стеке а в дате?
+    1 терминал:
+        gcc join_example.c -o thread
+        ./thread
+    2 терминал: 
+        cat /proc/PID/maps 
+    вывод:
+        1 терминал: 
+            [main] создание потока
+            [main] cat /proc/15760/maps
+
+            [worker] поток 1 запущен
+            [worker] поток 1 завершил работу
+            [worker] msg string adress: 0x60da0ee6e066
+            [main] поток worker вернул строку: 'hello world'
+        
+        2 терминал:
+            60da0ee6c000-60da0ee6d000 r--p 00000000 103:05 530325                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_2/c/thread
+            60da0ee6d000-60da0ee6e000 r-xp 00001000 103:05 530325                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_2/c/thread
+            60da0ee6e000-60da0ee6f000 r--p 00002000 103:05 530325                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_2/c/thread
+            60da0ee6f000-60da0ee70000 r--p 00002000 103:05 530325                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_2/c/thread
+            60da0ee70000-60da0ee71000 rw-p 00003000 103:05 530325                    /home/sorokinm/Desktop/NSU_labs_OS_5-semester/threads/labC/lab1_2/c/thread
+            60da14cf2000-60da14d13000 rw-p 00000000 00:00 0                          [heap]
+            75b372600000-75b372601000 ---p 00000000 00:00 0 
+            75b372601000-75b372e01000 rw-p 00000000 00:00 0 
+            75b373000000-75b373028000 r--p 00000000 103:05 2242773                   /usr/lib/x86_64-linux-gnu/libc.so.6
+            75b373028000-75b3731b0000 r-xp 00028000 103:05 2242773                   /usr/lib/x86_64-linux-gnu/libc.so.6
+            75b3731b0000-75b3731ff000 r--p 001b0000 103:05 2242773                   /usr/lib/x86_64-linux-gnu/libc.so.6
+            75b3731ff000-75b373203000 r--p 001fe000 103:05 2242773                   /usr/lib/x86_64-linux-gnu/libc.so.6
+            75b373203000-75b373205000 rw-p 00202000 103:05 2242773                   /usr/lib/x86_64-linux-gnu/libc.so.6
+            75b373205000-75b373212000 rw-p 00000000 00:00 0 
+            75b373294000-75b373297000 rw-p 00000000 00:00 0 
+            75b3732ad000-75b3732af000 rw-p 00000000 00:00 0 
+            75b3732af000-75b3732b0000 r--p 00000000 103:05 2242770                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+            75b3732b0000-75b3732db000 r-xp 00001000 103:05 2242770                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+            75b3732db000-75b3732e5000 r--p 0002c000 103:05 2242770                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+            75b3732e5000-75b3732e7000 r--p 00036000 103:05 2242770                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+            75b3732e7000-75b3732e9000 rw-p 00038000 103:05 2242770                   /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+            7ffe22513000-7ffe22535000 rw-p 00000000 00:00 0                          [stack]
+            7ffe225bb000-7ffe225bf000 r--p 00000000 00:00 0                          [vvar]
+            7ffe225bf000-7ffe225c1000 r-xp 00000000 00:00 0                          [vdso]
+            ffffffffff600000-ffffffffff601000 --xp 00000000 00:00 0                  [vsyscall]
+
+    как понял msg лежит в секции .rodata, поскольку msg никак не изменяется (константый литерал) 
+        + попытка изменений дает сегфолт.
+        Это чтобы безопасно возвращать указатель на msg из потока, так как данные продолжают 
+        существовать после завершения потока. Если бы литерал лежал на стеке, 
+        то по завершении работы потока стек был бы освобожден и я бы обращался к освобождённому блоку памяти -> сегфолт.

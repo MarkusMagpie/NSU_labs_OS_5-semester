@@ -9,9 +9,15 @@
 
 void* worker(void* arg) {
     int id = *(int*)arg;
-    printf("[worker] поток %d запущен\n", id);
+    printf("[worker] поток %d запущен (10 сек sleep())\n", id);
+    sleep(10);
+    void *ret = (void*)(long)42;
+    // в proc/PID/maps не будет такой области в которой может лежать этот адрес. 
+    // как понимаю значение будет просто встраиваться в .text секцию
+    printf("[worker] ret address: %p\n", ret);
+    sleep(10);
     printf("[worker] поток %d завершил работу\n", id);
-    return (void*)(long)42;
+    return ret;
 }
 
 int main() {
@@ -21,6 +27,7 @@ int main() {
     void* retval;
 
     printf("[main] создание потока\n");
+    printf("[main] cat /proc/%d/maps\n\n", getpid());
     err = pthread_create(&tid, NULL, worker, &arg);
     if (err != 0) {
         printf("main: pthread_create() failed: %s\n", strerror(err));

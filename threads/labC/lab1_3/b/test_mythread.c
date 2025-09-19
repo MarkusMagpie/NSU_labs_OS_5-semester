@@ -45,7 +45,7 @@ void* jober(void* arg) {
     }
 
     // ВАЖНО: продемонстрируй что убрав комментарий значения number выведутся нормальные
-    // sleep(1);
+    sleep(1);
 
     // func продолжает работать с указателем на уничтоженный стек
     printf("[jober] завершение (его стек будет уничтожен)\n");
@@ -62,7 +62,7 @@ int main() {
         printf("[main] pthread_create() failed: %s\n", strerror(err));
         return EXIT_FAILURE;
     }
-    
+
     pthread_join(jober_tid, NULL);
     
     // время func-у попытаться обратиться к освобожденной памяти

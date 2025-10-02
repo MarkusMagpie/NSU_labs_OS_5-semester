@@ -31,7 +31,7 @@ void sigint_handler(int signo) {
 }
 
 void* handler_thread(void* arg) {
-    // наследует блокировку от main -> в этом потоке тоже заблокирован SIGINT и SIGQUIT
+    // наследует блокировку от main -> в этом потоке (на момент его создания) тоже заблокирован SIGINT и SIGQUIT
     sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGINT);
@@ -88,7 +88,7 @@ int main() {
     sigaddset(&set, SIGQUIT);
     pthread_sigmask(SIG_BLOCK, &set, NULL); // заблокируй в потоке main() сигналы SIGINT и SIGQUIT 
 
-    // ! так как 3 потока ниже дочерние для main(), то они наследуют его маску сигналов
+    // ! так как 3 потока ниже дочерние для main(), то они наследуют его маску/набор сигналов set
 
     err1 = pthread_create(&t1, NULL, blocker_thread, NULL);
     if (err1 != 0) {

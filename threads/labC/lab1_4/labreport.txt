@@ -198,6 +198,12 @@ c. В поточной функции выделите память под ст�
 
     A clean-up handler is a function that is automatically executed when a thread is canceled (вызван pthread_cancel()).
 
+
+    When a thread is canceled, all of the stacked clean-up handlers
+        are popped and executed in the reverse of the order in which
+        they were pushed onto the stack.
+    ! вырезка из мана: https://man7.org/linux/man-pages/man3/pthread_cleanup_push.3.html
+    
     pthread_cleanup_push
         void pthread_cleanup_push(void (routine)(void*), void *arg);
             routine - указатель на функцию cleanup handler.

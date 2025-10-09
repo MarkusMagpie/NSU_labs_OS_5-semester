@@ -83,6 +83,9 @@ int main() {
 
     printf("[%d - main(0)] main thread started\n", tid);
 
+    printf("watch -n1 cat /proc/%d/status | grep Sig\n\n", getpid());
+    sleep(5);
+
     sigemptyset(&set);
     sigaddset(&set, SIGINT);
     sigaddset(&set, SIGQUIT);

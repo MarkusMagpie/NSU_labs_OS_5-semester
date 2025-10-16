@@ -40,6 +40,9 @@ void* handler_thread(void* arg) {
     // установка обработчика сигнала SIGINT для ПРОЦЕССА, не только потока handler_thread()
     struct sigaction sa;
     sa.sa_handler = sigint_handler;
+    /*
+    SA_RESETHAND - Restore the signal action to the default upon entry to the signal handler.
+    */
     sa.sa_flags = 0;
     sigemptyset(&sa.sa_mask); // маска/набор сигналов, которые должны блокироваться при обработке сигнала SIGINT 
     sigaction(SIGINT, &sa, NULL);

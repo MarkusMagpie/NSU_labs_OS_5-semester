@@ -6,7 +6,7 @@
 
 // фоновый периодический вывод статистики очереди queue_t q
 void *qmonitor(void *arg) {
-	// pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL); // необязательно ибо ниже почти сразу есть printf() и sleep() - точки отмены
+	// ниже почти сразу есть printf() и sleep() - точки отмены
 	
 	queue_t *q = (queue_t *)arg;
 
@@ -49,9 +49,11 @@ queue_t* queue_init(int max_count) {
 
 // освобождение ресурсов очереди q
 void queue_destroy(queue_t *q) {
-	// отменил монитор‑поток и жду его завершения
-    pthread_cancel(q->qmonitor_tid);
-    pthread_join (q->qmonitor_tid, NULL);
+	// отменил монитор‑поток
+    int err = pthread_cancel(q->qmonitor_tid);
+	if (err != 0) {
+		printf("queue_destroy: pthread_cancel() failed: %s\n", strerror(err));
+	}
 
     // вычищаю все узлы в списке
     qnode_t *cur = q->first;

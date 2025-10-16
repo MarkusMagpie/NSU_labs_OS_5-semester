@@ -80,7 +80,8 @@ int main() {
 
 	printf("main [%d %d %d]\n", getpid(), getppid(), gettid());
 
-	q = queue_init(10000);
+	// q = queue_init(10000);
+	q = queue_init(1000);
 
 	err = pthread_create(&tid, NULL, reader, q);
 	if (err) {
@@ -97,6 +98,7 @@ int main() {
 	}
 
 	// TODO: join threads
+	pthread_join(tid, NULL);
 
 	pthread_exit(NULL);
 

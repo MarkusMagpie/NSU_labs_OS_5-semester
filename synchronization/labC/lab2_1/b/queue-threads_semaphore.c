@@ -67,7 +67,7 @@ void *writer(void *arg) {
 	int i = 0;
 	queue_t *q = (queue_t *)arg;
 
-    sem_post(&started);
+    sem_post(&started); // НОВОЕ - инкремент счетчика семафора
     
     printf("writer [%d %d %d]\n", getpid(), getppid(), gettid());
 
@@ -110,7 +110,7 @@ int main() {
     pthread_join(tid1, NULL);
     pthread_join(tid2, NULL);
 
-    sem_destroy(&started);
+    sem_destroy(&started); // НОВОЕ
 
 	pthread_exit(NULL);
 

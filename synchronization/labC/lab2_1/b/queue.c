@@ -47,9 +47,11 @@ queue_t* queue_init(int max_count) {
 
 // освобождение ресурсов очереди q
 void queue_destroy(queue_t *q) {
-	// отменил монитор‑поток и жду его завершения
-    pthread_cancel(q->qmonitor_tid);
-    pthread_join (q->qmonitor_tid, NULL);
+	// отменил монитор‑поток
+    int err = pthread_cancel(q->qmonitor_tid);
+	if (err != 0) {
+		printf("queue_destroy: pthread_cancel() failed: %s\n", strerror(err));
+	}
 
     // вычищаю все узлы в списке
     qnode_t *cur = q->first;

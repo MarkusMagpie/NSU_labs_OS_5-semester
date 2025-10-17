@@ -180,7 +180,14 @@ a. Напишите программу с тремя потоками, таки�
             5 обработчик при попытке захвата мьютекса усыпляет главный поток. 
                 Обработчик не может продолжать выполнение, не захватив мьютекс.
                 В то же время главный поток не может освободить мьютекс пока обработчик сигнала не завершит работу.
-            -> взаимная блокировка/deadlock   
+            -> взаимная блокировка/deadlock
+
+        Remember that Unix signals can occur at every machine instruction in user space. 
+            With bad luck, a signal might occur in the few machine instructions which are updating the 
+            global state of malloc. Then future calls to malloc -e.g. indirectly from your signal handler, 
+            might break havoc (i.e. undefined behavior).
+
+        Ответ взят отсюда: https://stackoverflow.com/questions/32185822/is-it-always-unsafe-when-i-call-a-non-async-safe-function-from-a-signal-handler/32186023#32186023
 
 b. Можно ли установить обработчики сигнала для каждого потока?
     

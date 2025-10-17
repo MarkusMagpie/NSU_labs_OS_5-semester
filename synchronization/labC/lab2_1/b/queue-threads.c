@@ -80,8 +80,8 @@ int main() {
 
 	printf("main [%d %d %d]\n", getpid(), getppid(), gettid());
 
-	// q = queue_init(10000);
-	q = queue_init(1000);
+	q = queue_init(1000000);
+	// q = queue_init(1000);
 
 	err = pthread_create(&tid, NULL, reader, q);
 	if (err) {

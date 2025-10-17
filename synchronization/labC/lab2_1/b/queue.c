@@ -110,7 +110,8 @@ int queue_get(queue_t *q, int *val) {
 	if (q->count == 0)
 		return 0;
 
-	qnode_t *tmp = q->first;
+	// сохраняю указатель на головной узел
+	qnode_t *tmp = q->first; 
 
 	*val = tmp->val; // записал значение головного узла в *val
 	q->first = q->first->next;

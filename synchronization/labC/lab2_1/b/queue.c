@@ -116,6 +116,8 @@ int queue_get(queue_t *q, int *val) {
 	*val = tmp->val; // записал значение головного узла в *val
 	q->first = q->first->next;
 
+	// if (q->first == NULL) q->last = NULL; 
+
 	free(tmp);
 
 	q->count--;

@@ -469,14 +469,24 @@ ii. Поиграйте следующими параметрами:
                     queue_get: q->count-- (после извлечения элемента)
             сценарий:
                 в writer() между проверкой if (q->count == q->max_count) и инкрементом q->count++ другой поток мог изменить q->count. 
-                    Это может привести к временному состоянию, где (q->count > max_count).
+                    Это может привести к временному состоянию, где (q->count > max_count)
 
         Swgmentation fault:
+            в терминале выполняю: 
+                gcc -g queue-threads.c queue.c -o sync -lpthread
+                gdb ./sync
+            вывод (сегмент):
+                Thread 3 "sync" received signal SIGSEGV, Segmentation fault.
+                [Switching to Thread 0x7ffff70006c0 (LWP 12972)]
+                0x0000555555555b3a in queue_get (q=0x5555555596b0, val=0x7ffff6fffe94) at queue.c:116
+                116             *val = tmp->val; // записал значение головного узла в *val
+            сценарий:
+                см тетрадь
 
         expected != val:
             Нарушается порядок извлечения элементов из очереди reader()-ом из-за гонки потоков.
             сценарий:
-                writer() добавляет элементы: 100, 101, 102
-                reader() извлекает 100 (expected = 101)
-                из-за гонки элемент 101 может потеряться или просто не записаться
-                reader() получает 102, но expected = 101 -> ERROR: get value is 102 but expected - 101    
+                поток writer() добавляет элементы: 100, 101, 102
+                два потока выполняют reader() -> должны извлечься 100,101 (expected = 102)
+                но из-за отсутствие синхронизации рискую потерять один извлекаемый элемент -> 101 останется головным узлом в очереди 
+                reader() получает 101, но expected = 102 -> ERROR: get value is 101 but expected - 102    

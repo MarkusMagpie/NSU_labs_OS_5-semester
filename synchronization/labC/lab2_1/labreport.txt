@@ -492,16 +492,15 @@ ii. Поиграйте следующими параметрами:
                 reader() получает 101, но expected = 102 -> ERROR: get value is 101 but expected - 102    
 
     ? Segmentation fault через дебаггер: 
-        first=last=A
-
         сценарий:
-            writer1: new node B
+            writer1: first=last=A               // count = 1
+            writer2: new node B
             writer2: if (!q->first)             // false
 
             reader1: tmp=first=A
-            reader1: *val=val->tmp=A->val
+            reader1: *val=tmp->val=A->val
             reader1: first=first->next=nullptr
-            reader1: free(tmp)                  // A freed
+            reader1: free(tmp)                  // q->first=nullptr
             reader1: count--                    // count=0
 
             writer2: last->next=new=B
@@ -519,9 +518,9 @@ ii. Поиграйте следующими параметрами:
 
         ВАЖНО: https://stackoverflow.com/a/16204696
             SIGSEGV is directed to the offending thread
-            - это значит что после получения сигнала, получит его getter поток, а writer может еще работать -> 
+            - это значит что после получения сигнала, получит его reader() поток, а writer() может еще работать -> 
                 в выводе значений дебаггера на момент получения сигнала SIGSEGV вижу что q->first != nullptr. 
-                Это делает поток writer, который не словил сигнал в отличе от getter() потока.
+                Это делает поток writer, который не словил сигнал в отличе от reader() потока.
                 Вывод значений из gdb:
                     tmp = 0x0
                     val = 0x7ffff6fffe94
@@ -535,3 +534,14 @@ ii. Поиграйте следующими параметрами:
                 as a consequence of executing a specific machine-language
                 instruction that triggered a hardware exception (e.g., SIGSEGV for
                 an invalid memory access, or...
+
+        Работа с core dump:
+            создание core dump:
+                gcc -g queue-threads.c queue.c -o sync -lpthread
+                gdb ./sync
+                run
+                generate-core-file ./sync_core
+                q
+            анализ core dump в gdb:
+                gdb ./sync sync_core
+                bt full

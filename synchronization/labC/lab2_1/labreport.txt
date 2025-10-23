@@ -490,3 +490,48 @@ ii. Поиграйте следующими параметрами:
                 два потока выполняют reader() -> должны извлечься 100,101 (expected = 102)
                 но из-за отсутствие синхронизации рискую потерять один извлекаемый элемент -> 101 останется головным узлом в очереди 
                 reader() получает 101, но expected = 102 -> ERROR: get value is 101 but expected - 102    
+
+    ? Segmentation fault через дебаггер: 
+        first=last=A
+
+        сценарий:
+            writer1: new node B
+            writer2: if (!q->first)             // false
+
+            reader1: tmp=first=A
+            reader1: *val=val->tmp=A->val
+            reader1: first=first->next=nullptr
+            reader1: free(tmp)                  // A freed
+            reader1: count--                    // count=0
+
+            writer2: last->next=new=B
+            writer2: last=last->next=B
+            writer2: count++                    // count=1
+
+            state1:
+            // на данный момент имею: count=1, first=nullptr, last=B
+            если первый после этого reader3, то будет чтение по nullptr->SIGSEGV
+
+            если первый будет writer3, то:
+            writer3 отрабатывает итерацию                                       // после нее получаю: count=2, first=C, last=C
+            reader3 отрабатывает итерацию, но ждёт B а не C -> RED ERROR        // после нее получаю: count=1, first=nullptr, last=C
+            вернулись в state1, только теперь last=C, а не B
+
+        ВАЖНО: https://stackoverflow.com/a/16204696
+            SIGSEGV is directed to the offending thread
+            - это значит что после получения сигнала, получит его getter поток, а writer может еще работать -> 
+                в выводе значений дебаггера на момент получения сигнала SIGSEGV вижу что q->first != nullptr. 
+                Это делает поток writer, который не словил сигнал в отличе от getter() потока.
+                Вывод значений из gdb:
+                    tmp = 0x0
+                    val = 0x7ffff6fffe94
+                    *val = -1
+                    q = 0x5555555596b0
+                    first = 0x7ffff01279b0
+                    last = 0x7ffff0225c70
+        
+        Также здесь: https://man7.org/linux/man-pages/man7/signal.7.html 
+            A signal may be thread-directed because it was generated
+                as a consequence of executing a specific machine-language
+                instruction that triggered a hardware exception (e.g., SIGSEGV for
+                an invalid memory access, or...

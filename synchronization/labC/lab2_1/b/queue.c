@@ -110,6 +110,11 @@ int queue_get(queue_t *q, int *val) {
 	if (q->count == 0)
 		return 0;
 
+	/* ДОП 2 - так не ловим сигсегв 
+	if (q->count == 0 || !q->first)
+		return 0;
+	*/
+
 	// сохраняю указатель на головной узел
 	qnode_t *tmp = q->first; 
 

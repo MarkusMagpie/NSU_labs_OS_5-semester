@@ -224,22 +224,39 @@ d. Часто бывает, что поток, пишущий данные в о
         всех выводах выше. Поэтому количество реальных операций по успешному добавлению/извлечению элементов из очереди 
         всегла совпадает - reader() как только видит появившийся элемент в очереди, сразу его удаляет, а writer() не успевает восполнять. 
 
+
+
     ? (d) почему usleep(0) в спинлоке на 2 ядрах влияет на CPU% в htop?
     -   1) When a thread calls sleep(0), it signals to the scheduler that it is willing to temporarily give up its current CPU time slice.
             If there are no other threads ready to run, the function returns immediately, and the thread continues execution.
-            
-            В htop вижу что состояние потока writer() практически всегда S - Sleeping. Значит он делегирует свое время потоку reader(),
-                который находясь в активном ожидании захватывает лок, а оставшееся маленькое время работает сам. 
+
+            В htop вижу что состояние потока writer() практически всегда S - Sleeping (в htop отображается серым цветом). 
+                Значит writer() делегирует свое время R - Running потоку reader(), который находясь в активном ожидании захватывает лок, 
+                а сам writer() оставшееся маленькое время работает сам (потребляет CPU только сейчас). 
                 Поток writer() будет конкурировать за CPU только когда он в состоянии R - Running.
-            см здесь: https://stackoverflow.com/questions/3727420/significance-of-sleep0
+
+        2)  Согласно мануалу nanosleep() (https://man7.org/linux/man-pages/man2/nanosleep.2.html): 
+                nanosleep() suspends the execution of the calling thread until
+                either at least the time specified in *duration has elapsed, or
+                the delivery of a signal that triggers the invocation of a handler
+                in the calling thread or that terminates the process.
+                
+                nanosleep() всегда приостанавливает выполнение потока, даже когда запрошено нулевое время -> 
+                    поток переходит в состояние S - Sleeping (в htop отображается серым цветом) ->
+                    планировщик это видит и выбирает другой активный поток со статусом R - Running (reader()) ->
+                    reader() находясь в активном ожидании захватывает совбодный лок и работает.
+        !) Согласно другому мануалу (https://pubs.opengroup.org/onlinepubs/7908799/xsh/nanosleep.html):
+            The suspension time may be longer than requested because because of the scheduling of other activity by the system.
+
+
 
     ? (e) почему нет kernel time в мьютексе с usleep() на 2 ядрах?
     -   In the default configuration, a thread tries to acquire the lock
             by initially performing an atomic test-and-set operation. If
             this operation fails, the thread goes to sleep.
                 
-            А так как поток writer() имеет состояние S - Sleeping (находясь в нем мьютекс разблокирован), 
-                то поток reader() может захватить мьютекс.
+            А так как поток writer() практически всегда имеет состояние S - Sleeping (находясь в нем мьютекс разблокирован), 
+                то поток reader() может захватить мьютекс атомарно, то есть не переходя в kernel space.
             см здесь: https://alessandropellegrini.it/publications/Mar19b.pdf
 
 

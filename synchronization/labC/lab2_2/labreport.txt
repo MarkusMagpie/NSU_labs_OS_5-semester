@@ -246,7 +246,7 @@ d. Часто бывает, что поток, пишущий данные в о
                     планировщик это видит и выбирает другой активный поток со статусом R - Running (reader()) ->
                     reader() находясь в активном ожидании захватывает совбодный лок и работает.
         !) Согласно другому мануалу (https://pubs.opengroup.org/onlinepubs/7908799/xsh/nanosleep.html):
-            The suspension time may be longer than requested because because of the scheduling of other activity by the system.
+            The suspension time may be longer than requested because of the scheduling of other activity by the system.
 
 
 

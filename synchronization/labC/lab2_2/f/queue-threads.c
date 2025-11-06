@@ -99,6 +99,8 @@ int main() {
 	}
 
 	// TODO: join threads
+	pthread_join(reader_tid, NULL);
+	pthread_join(writer_tid, NULL);
 
 	pthread_exit(NULL);
 

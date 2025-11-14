@@ -83,7 +83,7 @@ int queue_add(queue_t *q, int val) {
 	qnode_t *new = malloc(sizeof(qnode_t));
 	if (!new) {
 		printf("Cannot allocate memory for new node\n");
-		abort();
+		return 0;
 	}
 
 	new->val = val;

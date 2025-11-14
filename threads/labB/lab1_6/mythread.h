@@ -20,6 +20,7 @@ typedef struct {
     int canceled;
     int finished;
     int joined;
+    pid_t tid;
 } mythread_struct_t;
 
 typedef mythread_struct_t* mythread_t; // указатель на mythread_struct - дескриптор потока

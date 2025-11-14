@@ -4,6 +4,11 @@
 
 static int thread_startup(void *arg) {
     mythread_struct_t *ts = (mythread_struct_t *)arg;
+
+    ts->tid = gettid();
+    
+    printf("[thread TID:%d] started...\n", ts->tid);
+
     // сохраняю контекст перед запуском start_routine в поле before_start_routine
     if (getcontext(&ts->before_start_routine) == -1) {
         _exit(1);
@@ -11,10 +16,15 @@ static int thread_startup(void *arg) {
 
     // если поток не был отменен, то запускаю start_routine
     if (!ts->canceled) {
+        printf("[thread TID:%d] calling start_routine...\n", ts->tid);
         ts->retval = ts->start_routine(ts->arg);
+        printf("[thread TID:%d] start_routine completed with return value: %ld\n", ts->tid, (long)ts->retval);
+    } else {
+        printf("[thread TID:%d] cancelled\n", ts->tid);
     }
 
     ts->finished = 1;
+    printf("[thread TID:%d] finished, waiting for join...\n", ts->tid);
     
     // жиду пока кто-нибудь вызовет join
     while (!ts->joined) {
@@ -39,6 +49,8 @@ int mythread_join(mythread_t thread, void **retval) {
     if (retval) *retval = ts->retval;
     ts->joined = 1;
 
+    printf("[mythread_join] thread TID:%d joined\n", ts->tid);
+
     return 0;
 }
 
@@ -46,6 +58,8 @@ int mythread_join(mythread_t thread, void **retval) {
 int mythread_cancel(mythread_t thread) {
     mythread_struct_t *ts = thread;
     ts->canceled = 1;
+
+    printf("[mythread_cancel] thread TID:%d cancelled\n", ts->tid);
 
     return 0;
 }
@@ -70,6 +84,7 @@ int mythread_create(mythread_t *thread, void *(*start_routine)(void *), void *ar
 
     void *stack_top = (char*)stack + MYTHREAD_STACK_SIZE;
     int flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD | CLONE_IO;
+    
     pid_t tid = clone(thread_startup, stack_top, flags, ts);
     if (tid == -1) {
         free(stack);

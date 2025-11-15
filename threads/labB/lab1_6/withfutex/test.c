@@ -10,6 +10,7 @@ void *func(void *arg) {
 
 int main() {
     mythread_t tid[N];
+    int thread_tids[N]; // НОВОЕ: массив TID 
     void *retval;
 
     printf("[main] [PID: %d, PPID: %d, TID: %d] - hello from main!\n", getpid(), getppid(), gettid());
@@ -20,6 +21,7 @@ int main() {
             printf("mythread_create() failed\n");
             return EXIT_FAILURE;
         }
+        thread_tids[i] = tid[i]->tid;
         // usleep(1000);
     }
 
@@ -31,16 +33,16 @@ int main() {
     // mythread_join(tid, &retval);
 
     for (int i = 0; i < N; i++) {
-        printf("[main] joining thread (TID:%d)\n", tid[i]->tid);
+        printf("[main] joining thread (TID:%d)\n", thread_tids[i]);
         if (mythread_join(tid[i], &retval) != 0) {
             printf("mythread_join() failed\n");
             return EXIT_FAILURE;
         }
         
         if (retval == NULL) {
-            printf("[main] func thread (TID:%d) was cancelled before completion\n", tid[i]->tid);
+            printf("[main] func thread (TID:%d) was cancelled before completion\n", thread_tids[i]);
         } else {
-            printf("[main] func thread (TID:%d) returned: %ld\n", tid[i]->tid, (long)retval);
+            printf("[main] func thread (TID:%d) returned: %ld\n", thread_tids[i], (long)retval);
         }
     }
 

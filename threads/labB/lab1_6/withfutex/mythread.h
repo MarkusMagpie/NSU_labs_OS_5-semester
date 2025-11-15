@@ -12,6 +12,14 @@
 #include <ucontext.h>
 #include <sys/mman.h>
 
+// НОВОЕ
+#ifndef FUTEX_WAIT
+#define FUTEX_WAIT 0
+#endif
+#ifndef FUTEX_WAKE
+#define FUTEX_WAKE 1
+#endif
+
 typedef struct {
     void *(*start_routine)(void *);
     void *arg;
@@ -19,10 +27,12 @@ typedef struct {
     ucontext_t before_start_routine;
     void *retval;
     int canceled;
-    int finished;
-    int joined;
-    pid_t tid;
-    void *stack_base; // для освобождение стека в mythread_join()
+
+    // ЛИКВИДИРУЮ флаги finished и joined
+
+    // НОВОЕ
+    volatile int tid;
+    void *stack_base;
 } mythread_struct_t;
 
 typedef mythread_struct_t* mythread_t; // указатель на mythread_struct - дескриптор потока
@@ -30,5 +40,7 @@ typedef mythread_struct_t* mythread_t; // указатель на mythread_struc
 int mythread_create(mythread_t *thread, void *(*start_routine)(void *), void *arg);
 int mythread_join(mythread_t thread, void **retval);
 int mythread_cancel(mythread_t thread);
+
+int futex_wait(volatile int *addr, int expected);
 
 #endif /*MYTHREAD_H*/ 

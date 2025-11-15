@@ -10,8 +10,20 @@
         export LD_LIBRARY_PATH="$PWD:$LD_LIBRARY_PATH"
         ./test
     вывод:
-        [main] [PID: 9286, PPID: 4656, TID: 9286] - hello from main!
-        [func] [PID: 9286, PPID: 4656, TID: 9287] - hello everynan, I'm from custom thread!
+        раньше: 
+            [main] [PID: 9286, PPID: 4656, TID: 9286] - hello from main!
+            [func] [PID: 9286, PPID: 4656, TID: 9287] - hello everynan, I'm from custom thread!
+
+        сейчас:
+            [main] [PID: 4645, PPID: 3371, TID: 4645] - hello from main!
+            [thread TID:4646] started...
+            [thread TID:4646] calling start_routine...
+            [thread TID:4646] start_routine completed with return value: 123
+            [thread TID:4646] finished, waiting for join...
+            [main] joining thread (TID:4646)
+            [mythread_join] thread TID:4646 joined
+            [main] func thread (TID:4646) returned: 123
+            [main] all threads completed successfully!!!
 
     pthread_create
         int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void*), void *arg);

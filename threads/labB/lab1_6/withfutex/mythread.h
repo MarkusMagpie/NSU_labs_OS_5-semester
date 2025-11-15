@@ -31,7 +31,7 @@ typedef struct {
     // ЛИКВИДИРУЮ флаги finished и joined
 
     // НОВОЕ
-    volatile int tid;
+    int tid;
     void *stack_base;
 } mythread_struct_t;
 

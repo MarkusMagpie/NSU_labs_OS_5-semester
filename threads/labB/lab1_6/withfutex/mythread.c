@@ -3,7 +3,18 @@
 
 #define MYTHREAD_STACK_SIZE (1024 * 1024)
 
+// поток при (*addr = ts->tid) == expected засыпает и ждет FUTEX_WAKE; 
+// поток проснется при изменении ts->tid (занулится)
 int futex_wait(volatile int *addr, int expected) {
+/* https://man7.org/linux/man-pages/man2/futex.2.html 
+    long syscall(SYS_futex, 
+        uint32_t *uaddr,                    адрес futex-переменной (&ts->tid)
+        int op,                             операция: FUTEX_WAIT или FUTEX_WAKE
+        int val,                            ожидаемое значение
+        const struct timespec *timeout,     таймаут
+        int *uaddr2,                        второй адрес (для сложных операций)
+        int val3);                          доп флаги
+*/
     return (int)syscall(SYS_futex, (int *)addr, FUTEX_WAIT, expected, NULL, NULL, 0);
 }
 

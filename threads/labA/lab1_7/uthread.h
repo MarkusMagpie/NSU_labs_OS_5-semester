@@ -24,4 +24,8 @@ void uthread_yield(void);
 // запуск планировщика 
 void uthread_run(void);
 
+int uthread_join(uthread_t tid, void **retval);
+
+void uthread_run(void);
+
 #endif 

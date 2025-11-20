@@ -24,6 +24,75 @@
         [uthread_wrapper] поток 0 завершил работу.
         [uthread_wrapper] поток 1 завершил работу.
 
+    в терминале для test2.c выполняю:
+        gcc -shared -o libuthread.so uthread.c
+        gcc -o test2 test2.c -L. -luthread
+        export LD_LIBRARY_PATH="$PWD:$LD_LIBRARY_PATH"
+        ./test2 
+    вывод:
+        [main] starting, creating 10 uthreads
+        [thread 0] - iteration: 0
+        [thread 1] - iteration: 0
+        [thread 2] - iteration: 0
+        [thread 3] - iteration: 0
+        [thread 4] - iteration: 0
+        [thread 5] - iteration: 0
+        [thread 6] - iteration: 0
+        [thread 7] - iteration: 0
+        [thread 8] - iteration: 0
+        [thread 9] - iteration: 0
+        [thread 0] - iteration: 1
+        [thread 1] - iteration: 1
+        [thread 2] - iteration: 1
+        [thread 3] - iteration: 1
+        [thread 4] - iteration: 1
+        [thread 5] - iteration: 1
+        [thread 6] - iteration: 1
+        [thread 7] - iteration: 1
+        [thread 8] - iteration: 1
+        [thread 9] - iteration: 1
+        [thread 0] - iteration: 2
+        [thread 1] - iteration: 2
+        [thread 2] - iteration: 2
+        [thread 3] - iteration: 2
+        [thread 4] - iteration: 2
+        [thread 5] - iteration: 2
+        [thread 6] - iteration: 2
+        [thread 7] - iteration: 2
+        [thread 8] - iteration: 2
+        [thread 9] - iteration: 2
+        [uthread_wrapper] поток 0 завершил работу.
+        [uthread_wrapper] поток 1 завершил работу.
+        [uthread_wrapper] поток 2 завершил работу.
+        [uthread_wrapper] поток 3 завершил работу.
+        [uthread_wrapper] поток 4 завершил работу.
+        [uthread_wrapper] поток 5 завершил работу.
+        [uthread_wrapper] поток 6 завершил работу.
+        [uthread_wrapper] поток 7 завершил работу.
+        [uthread_wrapper] поток 8 завершил работу.
+        [uthread_wrapper] поток 9 завершил работу.
+        [main] joining thread (UTID:0)
+        [main] func thread (UTID:0) returned: 123
+        [main] joining thread (UTID:1)
+        [main] func thread (UTID:1) returned: 124
+        [main] joining thread (UTID:2)
+        [main] func thread (UTID:2) returned: 125
+        [main] joining thread (UTID:3)
+        [main] func thread (UTID:3) returned: 126
+        [main] joining thread (UTID:4)
+        [main] func thread (UTID:4) returned: 127
+        [main] joining thread (UTID:5)
+        [main] func thread (UTID:5) returned: 128
+        [main] joining thread (UTID:6)
+        [main] func thread (UTID:6) returned: 129
+        [main] joining thread (UTID:7)
+        [main] func thread (UTID:7) returned: 130
+        [main] joining thread (UTID:8)
+        [main] func thread (UTID:8) returned: 131
+        [main] joining thread (UTID:9)
+        [main] func thread (UTID:9) returned: 132
+        [main] all threads completed successfully!!!
+
     описание логики:
         uthread.c
             разберем все глобальные статик переменные:

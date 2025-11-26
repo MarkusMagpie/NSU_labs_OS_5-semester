@@ -39,7 +39,7 @@ void *reader(void *arg) {
 	queue_t *q = (queue_t *)arg;
 	printf("reader [%d %d %d]\n", getpid(), getppid(), gettid());
 
-	set_cpu(1);
+	set_cpu(2);
 
 	while (1) {
 		int val = -1;
@@ -99,6 +99,8 @@ int main() {
 	}
 
 	// TODO: join threads
+	pthread_join(reader_tid, NULL);
+	pthread_join(writer_tid, NULL);
 
 	pthread_exit(NULL);
 

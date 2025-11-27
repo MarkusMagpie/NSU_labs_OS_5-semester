@@ -16,7 +16,6 @@ typedef struct {
     void *(*start_routine)(void *);
     void *arg;
 
-    ucontext_t before_start_routine;
     void *retval;
     int canceled;
     int finished;

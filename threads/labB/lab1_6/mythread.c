@@ -47,11 +47,11 @@ int mythread_join(mythread_t thread, void **retval) {
     printf("[mythread_join] thread TID:%d joined\n", ts->tid);
 
     // освобождение стека и структуры ts
-    if (ts->stack_base) {
-        munmap(ts->stack_base, MYTHREAD_STACK_SIZE);
-        ts->stack_base = NULL;
-    }
-    free(ts);
+    // if (ts->stack_base) {
+    //     munmap(ts->stack_base, MYTHREAD_STACK_SIZE);
+    //     ts->stack_base = NULL;
+    // }
+    // free(ts);
 
     return 0;
 }

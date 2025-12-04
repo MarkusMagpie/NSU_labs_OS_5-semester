@@ -3,17 +3,39 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define N 10
+#define N 100
+#define MAX_ITERATIONS 5
 
-void *func(void *arg) {
+
+
+// void *func(void *arg) {
+//     long thread_id = (long)arg;
+
+//     for (int i = 0; i < 3; ++i) {
+//         printf("[thread %ld] - iteration: %d\n", thread_id, i);
+//         uthread_yield();
+//     }
+
+//     return (void *)(100 + thread_id);
+// }
+
+void *func2(void *arg) {
     long thread_id = (long)arg;
-
-    for (int i = 0; i < 3; ++i) {
-        printf("[thread %ld] - iteration: %d\n", thread_id, i);
+    
+    // случайное количество итераций для каждого потока
+    int iterations = (rand() % MAX_ITERATIONS) + 1;
+    
+    printf("[thread %ld] started, will do %d iterations\n", thread_id, iterations);
+    
+    for (int i = 0; i < iterations; i++) {
+        printf("[thread %ld] iteration %d/%d\n", thread_id, i + 1, iterations);
         uthread_yield();
+        usleep(100000 * (thread_id % 3 + 1)); // 100-300 ms
     }
 
-    return (void *)(123 + thread_id);
+    printf("[thread %ld] completed\n", thread_id);
+
+    return (void *)(100 + thread_id);
 }
 
 int main(void) {
@@ -23,7 +45,7 @@ int main(void) {
     printf("[main] starting, creating %d uthreads\n", N);
 
     for (int i = 0; i < N; ++i) {
-        if (uthread_create(&tid[i], func, (void *)(long)i) != 0) {
+        if (uthread_create(&tid[i], func2, (void *)(long)i) != 0) {
             printf("uthread_create() failed\n");
             return EXIT_FAILURE;
         }

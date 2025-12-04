@@ -112,18 +112,18 @@ void uthread_yield(void) {
 }
 
 // запуск планировщика: сохраняю контекст main и передаю управление потокам
-void uthread_run(void) {
-    if (ucount == 0) return;
+// void uthread_run(void) {
+//     if (ucount == 0) return;
 
-    if (getcontext(&main_context) == -1) {
-        printf("getcontext() failed\n");   
-        return;
-    }
+//     if (getcontext(&main_context) == -1) {
+//         printf("getcontext() failed\n");   
+//         return;
+//     }
 
-    current = -1;
+//     current = -1;
 
-    uthread_yield();
-}
+//     uthread_yield();
+// }
 
 // ожидание завершения tid + возвращениеего  retval
 int uthread_join(uthread_t tid, void **retval) {

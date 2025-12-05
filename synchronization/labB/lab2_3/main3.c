@@ -47,7 +47,7 @@ void *compare_length_thread(void *data) {
 
     while (1) {
         Node *curr1;
-        // для получения 1 элемента
+        // 1 - блокировка чтения-записи для чтения хранилища для получения указателя 1 узла (тк только читаю storage->first, не меняю)
         pthread_rwlock_rdlock(&storage->sync);
 
         if((curr1 = storage->first) == NULL) {
@@ -56,14 +56,17 @@ void *compare_length_thread(void *data) {
             break;
         }
 
-        pthread_rwlock_rdlock(&curr1->sync);
+        // 2 - блокировка чтения-записи для записи 1 узла, так как буду менять в update_counter()
+        pthread_rwlock_wrlock(&curr1->sync);
 
+        // 3 - освобождение блокировки чтоения-записи хранилища
         pthread_rwlock_unlock(&storage->sync);
 
+        // 4 - прозод по парам узлов
         Node *curr2 = curr1->next;
         while (curr2 != NULL) {
             pthread_rwlock_rdlock(&curr2->sync);
-            // оба потока на момент сравнения имеют захваченные мьютексы
+            // оба потока на момент сравнения имеют захваченные rwlock: curr1 заблокирован на ЗАПИСЬ, curr2 на ЧТЕНИЕ
             // это логика из условия: - необходимо блокировать все записи с данными которых производится работа
             update_counter(curr1, curr2, type);
 
@@ -72,6 +75,7 @@ void *compare_length_thread(void *data) {
             curr2 = curr1->next;
         }
 
+        // 5 - освобождение блокировки чтения-записи последнего узла
         pthread_rwlock_unlock(&curr1->sync);
         
     }
@@ -98,6 +102,7 @@ void *swap_thread(void *data) {
     while (1) {
         Node *curr1, *curr2, *curr3;
 
+        // блокировка хранилища на запись тк изменяю storage->first
         pthread_rwlock_wrlock(&storage->sync);
 
         if((curr1 = storage->first) == NULL) {
@@ -106,6 +111,7 @@ void *swap_thread(void *data) {
             break;
         }
 
+        // блокировка первого узла на запись тк изменяю его указатель next и counter_swap
         pthread_rwlock_wrlock(&curr1->sync);
 
         if((curr2 = curr1->next) == NULL) {
@@ -115,10 +121,14 @@ void *swap_thread(void *data) {
             break;
         }
 
+        // блокировка второго узла на запись тк изменяю его указатель next и counter_swap
         pthread_rwlock_wrlock(&curr2->sync);
 
         if ((rand() % 2) == 0) {
+            // ... -> *storage->first -> curr1 -> curr2 -> ...
             swap_nodes(&storage->first, curr1, curr2);
+            // ... -> *storage->first -> curr2 -> curr1 -> ...
+            // обновляю локальные переменные: curr1 теперь указывает на curr2, curr2 на следующий за собой
             curr1 = storage->first;
             curr2 = curr1->next;
         }
@@ -127,17 +137,30 @@ void *swap_thread(void *data) {
         // до конца списка делаю 50% свап узлов 
         curr3 = curr2->next;
         while (curr3 != NULL) {
+            // блокировка третьего узла на запись тк может измениться его указатель next
             pthread_rwlock_wrlock(&curr3->sync);
 
             if ((rand() % 2) == 0) {
                 swap_nodes(&curr1->next, curr2, curr3);
+                // ... -> *cur1->next -> curr3 -> curr2 -> ...
             }
-            // ... -> *cur1->next -> curr3 -> curr2 -> ...
-            curr3 = curr1->next;
+
+            // какой узел теперь идет после curr1? (curr2 или curr3)
+            Node *new_second = curr1->next;
+            
+            // освобождаю старый curr1 (он больше не будет первым в следующей тройке)
             pthread_rwlock_unlock(&curr1->sync);
-            curr1 = curr3;
-            curr2 = curr1->next;
-            curr3 = curr2->next;
+            
+            // сдвиг на узел вперед:
+            curr1 = new_second; // новый первый узел следующей тройки
+            curr2 = curr1->next; // новый второй узел следующей тройки
+            
+            // есть ли следующий узел после curr2?
+            if (curr2 != NULL) {
+                curr3 = curr2->next; // новый третий узел для следующей тройки
+            } else {
+                curr3 = NULL; // достиг конца списка
+            }
         }
 
         pthread_rwlock_unlock(&curr1->sync);

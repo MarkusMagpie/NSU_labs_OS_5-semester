@@ -16,7 +16,7 @@
 #define EQ 2
 #define SWAP 3
 
-#define MAX_STRING_LENGTH 100
+#define MAX_STRING_LENGTH 100 // ограничение на максимальную длину строк, хранящихся в узле
 
 typedef struct Node {
     struct Node *next;
@@ -43,4 +43,5 @@ typedef struct _ThreadData {
 
 Storage *init_storage(int capacity);
 void add_node(Storage *storage, const char *value);
+Node* create_node(const char *value);
 void fill_storage(Storage *storage);

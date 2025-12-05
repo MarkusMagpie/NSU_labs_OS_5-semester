@@ -43,4 +43,5 @@ typedef struct _ThreadData {
 
 Storage *init_storage(int capacity);
 void add_node(Storage *storage, const char *value);
+Node* create_node(const char *value);
 void fill_storage(Storage *storage);

@@ -47,7 +47,7 @@ void *compare_length_thread(void *data) {
 
     while (1) {
         Node *curr1;
-        // для получения 1 элемента
+        // 1 - блокировка спинлока хранилища для получения указателя 1 узла
         pthread_spin_lock(&storage->sync);
 
         if((curr1 = storage->first) == NULL) {
@@ -56,10 +56,13 @@ void *compare_length_thread(void *data) {
             break;
         }
 
+        // 2 - блокировка спинлока 1 узла
         pthread_spin_lock(&curr1->sync);
 
+        // 3 - освобождение спинлока хранилища
         pthread_spin_unlock(&storage->sync);
 
+        // 4 - прозод по парам узлов
         Node *curr2 = curr1->next;
         while (curr2 != NULL) {
             pthread_spin_lock(&curr2->sync);
@@ -72,6 +75,7 @@ void *compare_length_thread(void *data) {
             curr2 = curr1->next;
         }
 
+        // 5 - освобождение спинлока последнего узла
         pthread_spin_unlock(&curr1->sync);
         
     }
@@ -118,7 +122,10 @@ void *swap_thread(void *data) {
         pthread_spin_lock(&curr2->sync);
 
         if ((rand() % 2) == 0) {
+            // ... -> *storage->first -> curr1 -> curr2 -> ...
             swap_nodes(&storage->first, curr1, curr2);
+            // ... -> *storage->first -> curr2 -> curr1 -> ...
+            // обновляю локальные переменные: curr1 теперь указывает на curr2, curr2 на следующий за собой
             curr1 = storage->first;
             curr2 = curr1->next;
         }
@@ -131,13 +138,25 @@ void *swap_thread(void *data) {
 
             if ((rand() % 2) == 0) {
                 swap_nodes(&curr1->next, curr2, curr3);
+                // ... -> *cur1->next -> curr3 -> curr2 -> ...
             }
-            // ... -> *cur1->next -> curr3 -> curr2 -> ...
-            curr3 = curr1->next;
+
+            // какой узел теперь идет после curr1? (curr2 или curr3)
+            Node *new_second = curr1->next;
+            
+            // освобождаю старый curr1 (он больше не будет первым в следующей тройке)
             pthread_spin_unlock(&curr1->sync);
-            curr1 = curr3;
-            curr2 = curr1->next;
-            curr3 = curr2->next;
+
+            // сдвиг на узел вперед:
+            curr1 = new_second; // новый первый узел следующей тройки
+            curr2 = curr1->next; // новый второй узел следующей тройки
+
+            // есть ли следующий узел после curr2?
+            if (curr2 != NULL) {
+                curr3 = curr2->next; // новый третий узел для следующей тройки
+            } else {
+                curr3 = NULL; // достиг конца списка
+            }
         }
 
         pthread_spin_unlock(&curr1->sync);
@@ -148,7 +167,7 @@ void *swap_thread(void *data) {
 }
 
 int main() {
-    srand(time(NULL)); // стартовое число
+    srand(time(NULL));
 
     Storage *storage = init_storage(STORAGE_CAPACITY);
     fill_storage(storage);

@@ -484,3 +484,53 @@
                 По аналогии с блокировкой в read режиме (pthread_rwlock_rdlock()).
 
             https://help.kpda.ru/neutrino/2020/help/index.jsp?topic=%2Fru.kpda.doc.os_ru%2Fhtml%2Flibraries%2Flibc%2Fp%2Fpthread_mutex_init.html
+
+
+
+? в каком случае поток работает быстрее из 3 вариантов: 1 spinlock; 2 mutex; 3 rwlock
+- 
+    большая конкуренция - я имею 7 потоков и они все блокируют одни и те же узлы
+    длина критических секций маленькая
+    мьютексы при коротком ожидании не уходят в сон, а спинятся в userspace
+    
+    Выводы:
+        TOTAL: swap=0 asc=0 dsc=0 eq=0
+        TOTAL: swap=1318975 asc=67533 dsc=68610 eq=508342
+        TOTAL: swap=1775705 asc=87021 dsc=127128 eq=635171
+        TOTAL: swap=4407680 asc=206345 dsc=387717 eq=1485795
+        TOTAL: swap=5284018 asc=264248 dsc=249521 eq=1932803
+        TOTAL: swap=6576726 asc=327702 dsc=312374 eq=2431910
+        TOTAL: swap=8685758 asc=437243 dsc=373583 eq=3234984
+        TOTAL: swap=9305768 asc=457275 dsc=440822 eq=3482863
+        TOTAL: swap=10973384 asc=527015 dsc=511525 eq=4066971
+        TOTAL: swap=12488460 asc=599846 dsc=580337 eq=4566507
+        TOTAL: swap=13905673 asc=667151 dsc=644798 eq=5087058
+        /* операций в секунду: 2030468 = 2 млн */
+
+
+        TOTAL: swap=0 asc=0 dsc=0 eq=0
+        TOTAL: swap=878139 asc=50995 dsc=101392 eq=461157
+        TOTAL: swap=2585582 asc=161288 dsc=179553 eq=1454333
+        TOTAL: swap=4029048 asc=251941 dsc=284388 eq=2287766
+        TOTAL: swap=4600477 asc=319737 dsc=0 eq=2923280
+        TOTAL: swap=6620948 asc=410126 dsc=526420 eq=3744827
+        TOTAL: swap=6350750 asc=442754 dsc=0 eq=4044367
+        TOTAL: swap=10688603 asc=670413 dsc=764688 eq=6084177
+        TOTAL: swap=12325719 asc=773579 dsc=882537 eq=6984194
+        TOTAL: swap=14053243 asc=881882 dsc=1005316 eq=7934038
+        TOTAL: swap=15748326 asc=988346 dsc=1127562 eq=8872465
+        /* операций в секунду: 2673670 = 2.6 млн */
+
+
+        TOTAL: swap=0 asc=0 dsc=0 eq=0
+        TOTAL: swap=295400 asc=151814 dsc=170100 eq=1261739
+        TOTAL: swap=566640 asc=303244 dsc=324218 eq=2535989
+        TOTAL: swap=872641 asc=501570 dsc=508485 eq=3663990
+        TOTAL: swap=1040130 asc=605939 dsc=666612 eq=4477777
+        TOTAL: swap=1473849 asc=852923 dsc=841491 eq=6345634
+        TOTAL: swap=1765182 asc=1035482 dsc=1007127 eq=7664116
+        TOTAL: swap=2044524 asc=1200913 dsc=1171881 eq=8838637
+        TOTAL: swap=2338929 asc=1367999 dsc=1357970 eq=10142888
+        TOTAL: swap=2623470 asc=1539018 dsc=1528372 eq=11366842
+        TOTAL: swap=2604436 asc=1525622 dsc=1699596 eq=11153915
+        /* 1900932 = 1.9 млн */

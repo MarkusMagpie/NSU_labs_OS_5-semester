@@ -8,7 +8,7 @@ void *count_monitor(void *arg) {
         while (n) {
             // pthread_mutex_lock(&n->sync); // чтобы другие потоки не меняли поля при принте 
             pthread_spin_lock(&n->sync);
-            printf("%s (swap=%d asc=%d dsc=%d eq=%d)\n", n->value, n->counter_swap, n->counter_asc, n->counter_dsc, n->counter_eq);
+            // printf("%s (swap=%d asc=%d dsc=%d eq=%d)\n", n->value, n->counter_swap, n->counter_asc, n->counter_dsc, n->counter_eq);
             total_swap += n->counter_swap;
             total_asc += n->counter_asc;
             total_dsc += n->counter_dsc;
@@ -18,7 +18,7 @@ void *count_monitor(void *arg) {
             n = n->next;
         }
 
-        printf("TOTAL: swap=%d asc=%d dsc=%d eq=%d\n\n", total_swap, total_asc, total_dsc, total_eq);
+        printf("TOTAL: swap=%d asc=%d dsc=%d eq=%d\n", total_swap, total_asc, total_dsc, total_eq);
         sleep(1);
     }
 

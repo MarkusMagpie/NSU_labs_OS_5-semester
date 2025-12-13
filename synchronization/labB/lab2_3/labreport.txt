@@ -534,3 +534,43 @@
         TOTAL: swap=2623470 asc=1539018 dsc=1528372 eq=11366842
         TOTAL: swap=2604436 asc=1525622 dsc=1699596 eq=11153915
         /* 1900932 = 1.9 млн */
+
+? объясни результат при увеличениии числа читателей (compare_length_thread()) каждого типа
+- 
+    при создании 1 compare_length_thread каждого типа получаю такой вывод:
+        TOTAL: swap=0 asc=44 dsc=0 eq=104
+        TOTAL: swap=654198 asc=320458 dsc=296601 eq=3021548
+        TOTAL: swap=1149975 asc=519025 dsc=597697 eq=4534185
+        TOTAL: swap=2222851 asc=991380 dsc=907895 eq=8815987
+        TOTAL: swap=2991904 asc=1366068 dsc=1234643 eq=11486278
+        TOTAL: swap=3758965 asc=1716023 dsc=1546087 eq=13891528
+        TOTAL: swap=4533980 asc=2038149 dsc=1883232 eq=16318613
+        TOTAL: swap=5297734 asc=2372021 dsc=2233924 eq=18781233
+        TOTAL: swap=6035324 asc=2722975 dsc=2588625 eq=21295455
+        TOTAL: swap=6861167 asc=3083843 dsc=2880942 eq=23651571
+        TOTAL: swap=6867744 asc=3046122 dsc=3231170 eq=23236336
+
+    swap=6.8 млн - писатели активно работают
+        asc=3 млн, dsc=3.2 млн, eq=23 млн
+    
+    при 5:
+        TOTAL: swap=0 asc=0 dsc=0 eq=0
+        TOTAL: swap=278 asc=548025 dsc=632925 eq=3715949
+        TOTAL: swap=442 asc=1145894 dsc=1012155 eq=7872309
+        TOTAL: swap=559 asc=1737015 dsc=1629323 eq=12488708
+        TOTAL: swap=738 asc=2244002 dsc=2289660 eq=16946152
+        TOTAL: swap=864 asc=2839669 dsc=2937242 eq=21141061
+        TOTAL: swap=1027 asc=3417226 dsc=3521457 eq=25595116
+        TOTAL: swap=1118 asc=4008535 dsc=4197936 eq=29764101
+        TOTAL: swap=1218 asc=4393449 dsc=4850092 eq=34054116
+        TOTAL: swap=1319 asc=5065927 dsc=5459327 eq=38170990
+        TOTAL: swap=1446 asc=5624556 dsc=6087164 eq=42720956
+    
+    swap=1446
+        asc=5.6 млн, dsc=6 млн, eq=42 млн - сравнений больше
+
+    пачему:
+        голодание писателей. Когда много читателей (compare_length_thread()), они постоянно держат блокировки на чтение (rdlock). 
+            пока есть хотя бы один читатель, новые читатели могут входить
+            писатель ждет пока ВСЕ читатели выйдут 
+        картинка: https://metanit.com/rust/tutorial/pics/9.11.png

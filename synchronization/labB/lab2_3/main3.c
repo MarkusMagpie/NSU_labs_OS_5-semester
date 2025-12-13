@@ -8,7 +8,7 @@ void *count_monitor(void *arg) {
         while (n) {
             // pthread_mutex_lock(&n->sync); // чтобы другие потоки не меняли поля при принте 
             pthread_rwlock_rdlock(&n->sync);
-            printf("%s (swap=%d asc=%d dsc=%d eq=%d)\n", n->value, n->counter_swap, n->counter_asc, n->counter_dsc, n->counter_eq);
+            // printf("%s (swap=%d asc=%d dsc=%d eq=%d)\n", n->value, n->counter_swap, n->counter_asc, n->counter_dsc, n->counter_eq);
             total_swap += n->counter_swap;
             total_asc += n->counter_asc;
             total_dsc += n->counter_dsc;
@@ -18,7 +18,7 @@ void *count_monitor(void *arg) {
             n = n->next;
         }
 
-        printf("TOTAL: swap=%d asc=%d dsc=%d eq=%d\n\n", total_swap, total_asc, total_dsc, total_eq);
+        printf("TOTAL: swap=%d asc=%d dsc=%d eq=%d\n", total_swap, total_asc, total_dsc, total_eq);
         sleep(1);
     }
 
@@ -170,33 +170,54 @@ void *swap_thread(void *data) {
     return NULL;
 }
 
+#define NUM_SWAP_THREADS 1
+#define NUM_ASC_THREADS 5
+#define NUM_DESC_THREADS 5
+#define NUM_EQ_THREADS 5
+
 int main() {
     srand(time(NULL)); // стартовое число
 
     Storage *storage = init_storage(STORAGE_CAPACITY);
     fill_storage(storage);
 
-    pthread_t monitor, compare_asc_tid, compare_desc_tid, compare_eq_tid, swap_tid1, swap_tid2, swap_tid3;
+    pthread_t monitor;
+    pthread_t swap_threads[NUM_SWAP_THREADS];
+    pthread_t asc_threads[NUM_ASC_THREADS];
+    pthread_t desc_threads[NUM_DESC_THREADS];
+    pthread_t eq_threads[NUM_EQ_THREADS];
 
     ThreadData compare_asc_data = {storage, ASC};
     ThreadData compare_desc_data = {storage, DESC};
     ThreadData compare_eq_data = {storage, EQ};
 
     pthread_create(&monitor, NULL, count_monitor, storage);
-    pthread_create(&compare_asc_tid, NULL, compare_length_thread, &compare_asc_data);
-    pthread_create(&compare_desc_tid, NULL, compare_length_thread, &compare_desc_data);
-    pthread_create(&compare_eq_tid, NULL, compare_length_thread, &compare_eq_data);
-    pthread_create(&swap_tid1, NULL, swap_thread, storage);
-    pthread_create(&swap_tid2, NULL, swap_thread, storage);
-    pthread_create(&swap_tid3, NULL, swap_thread, storage);
+    for (int i = 0; i < NUM_SWAP_THREADS; i++) {
+        pthread_create(&swap_threads[i], NULL, swap_thread, storage);
+    }
+    for (int i = 0; i < NUM_ASC_THREADS; i++) {
+        pthread_create(&asc_threads[i], NULL, compare_length_thread, &compare_asc_data);
+    }
+    for (int i = 0; i < NUM_DESC_THREADS; i++) {
+        pthread_create(&desc_threads[i], NULL, compare_length_thread, &compare_desc_data);
+    }
+    for (int i = 0; i < NUM_EQ_THREADS; i++) {
+        pthread_create(&eq_threads[i], NULL, compare_length_thread, &compare_eq_data);
+    }
 
-    pthread_join(compare_asc_tid, NULL);
-    pthread_join(compare_desc_tid, NULL);
-    pthread_join(compare_eq_tid, NULL);
-    pthread_join(swap_tid1, NULL);
-    pthread_join(swap_tid2, NULL);
-    pthread_join(swap_tid3, NULL);
     pthread_join(monitor, NULL);
+    for (int i = 0; i < NUM_SWAP_THREADS; i++) {
+        pthread_join(swap_threads[i], NULL);
+    }
+    for (int i = 0; i < NUM_ASC_THREADS; i++) {
+        pthread_join(asc_threads[i], NULL);
+    }
+    for (int i = 0; i < NUM_DESC_THREADS; i++) {
+        pthread_join(desc_threads[i], NULL);
+    }
+    for (int i = 0; i < NUM_EQ_THREADS; i++) {
+        pthread_join(eq_threads[i], NULL);
+    }
 
     return 0;
 }

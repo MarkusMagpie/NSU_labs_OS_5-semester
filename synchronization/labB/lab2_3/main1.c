@@ -1,13 +1,15 @@
 #include "queue1.h"
 
 void *count_monitor(void *arg) {
+    printf("count_monitor() started. TID: %d\n", gettid());
+
     Storage *s = arg;
     while (1) {
         Node *n = s->first;
         int total_swap = 0, total_asc = 0, total_dsc = 0, total_eq = 0;
         while (n) {
             pthread_mutex_lock(&n->sync);
-            printf("%s (swap=%d asc=%d dsc=%d eq=%d)\n", n->value, n->counter_swap, n->counter_asc, n->counter_dsc, n->counter_eq);
+            // printf("%s (swap=%d asc=%d dsc=%d eq=%d)\n", n->value, n->counter_swap, n->counter_asc, n->counter_dsc, n->counter_eq);
             total_swap += n->counter_swap;
             total_asc += n->counter_asc;
             total_dsc += n->counter_dsc;
@@ -16,7 +18,7 @@ void *count_monitor(void *arg) {
             n = n->next;
         }
 
-        printf("TOTAL: swap=%d asc=%d dsc=%d eq=%d\n\n", total_swap, total_asc, total_dsc, total_eq);
+        printf("TOTAL: swap=%d asc=%d dsc=%d eq=%d\n", total_swap, total_asc, total_dsc, total_eq);
         sleep(1);
     }
 
@@ -42,6 +44,16 @@ void *compare_length_thread(void *data) {
     ThreadData *thread_data = (ThreadData *)data;
     Storage *storage = thread_data->storage;
     int type = thread_data->type;
+
+    const char *type_name;
+    switch (type) {
+        case ASC: type_name = "ASC"; break;
+        case DESC: type_name = "DESC"; break;
+        case EQ: type_name = "EQ"; break;
+        default: type_name = "UNKNOWN"; break;
+    }
+    
+    printf("compare_length_thread(%s) started. TID: %d\n", type_name, gettid());
 
     while (1) {
         Node *curr1;
@@ -95,6 +107,8 @@ void swap_nodes(Node **curr1_next, Node *curr2, Node *curr3) {
 
 // из условия - при перестановке записей списка, необходимо блокировать три записи.
 void *swap_thread(void *data) {
+    printf("swap_thread() started. TID: %d\n", gettid());
+
     Storage *storage = (Storage *)data;
 
     while (1) {

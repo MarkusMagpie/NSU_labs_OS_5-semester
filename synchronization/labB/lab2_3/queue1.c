@@ -43,7 +43,7 @@ void add_node(Storage *storage, const char *value) {
 
 // при больших STORAGE_CAPACITY строки становятся длиннее (1-1, 10-2, 100-3, ...)
 void fill_storage(Storage *storage) {
-    char buff[24]; // максимальная длина строки в задаче: 100000, буфер хранит до 10^23
+    char buff[24];
     for (int i = 1; i <= storage->capacity; ++i) {
         sprintf(buff, "%d", i % (storage->capacity + 1));
         add_node(storage, buff);

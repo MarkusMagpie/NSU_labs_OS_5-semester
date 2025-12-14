@@ -37,7 +37,7 @@ void custom_mutex_lock(custom_mutex_t *s) {
             s->cnt = 1;
             return;
         }
-        // засыпаем и ждем пока другой поток не освободит лок
+        // засыпаю и жду пока другой поток не освободит лок
         futex_wait(&s->lock, 1);
     }
 }

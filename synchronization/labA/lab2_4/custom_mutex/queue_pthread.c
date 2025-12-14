@@ -1,4 +1,4 @@
-#include "queue.h"
+#include "queue_pthread.h"
 
 Storage *init_storage(int capacity) {
     Storage *storage = (Storage*)malloc(sizeof(Storage));
@@ -7,7 +7,7 @@ Storage *init_storage(int capacity) {
         exit(EXIT_FAILURE);
     }
 
-    custom_spinlock_init(&(storage->sync));
+    pthread_mutex_init(&(storage->sync), NULL);
     storage->capacity = capacity;
     storage->first = NULL;
 
@@ -22,7 +22,7 @@ Node *create_node(const char *value) {
     }
 
     strcpy(new_node->value, value);
-    custom_spinlock_init(&(new_node->sync));
+    pthread_mutex_init(&(new_node->sync), NULL);
 
     return new_node;
 }

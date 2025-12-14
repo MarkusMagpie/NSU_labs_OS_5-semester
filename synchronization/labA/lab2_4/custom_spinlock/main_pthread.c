@@ -1,4 +1,4 @@
-#include "queue_custom.h"
+#include "queue_pthread.h"
 
 void *count_monitor(void *arg) {
     Storage *s = arg;
@@ -6,13 +6,13 @@ void *count_monitor(void *arg) {
         Node *n = s->first;
         int total_swap = 0, total_asc = 0, total_dsc = 0, total_eq = 0;
         while (n) {
-            custom_spinlock_lock(&n->sync); // чтобы другие потоки не меняли поля при принте 
+            pthread_spin_lock(&n->sync);
             // printf("%s (swap=%d asc=%d dsc=%d eq=%d)\n", n->value, n->counter_swap, n->counter_asc, n->counter_dsc, n->counter_eq);
             total_swap += n->counter_swap;
             total_asc += n->counter_asc;
             total_dsc += n->counter_dsc;
             total_eq += n->counter_eq;
-            custom_spinlock_unlock(&n->sync);
+            pthread_spin_unlock(&n->sync);
             n = n->next;
         }
 
@@ -46,31 +46,31 @@ void *compare_length_thread(void *data) {
     while (1) {
         Node *curr1;
         // для получения 1 элемента
-        custom_spinlock_lock(&storage->sync);
+        pthread_spin_lock(&storage->sync);
 
         if((curr1 = storage->first) == NULL) {
             printf("compare_length_thread(): curr1 is NULL\n");
-            custom_spinlock_unlock(&storage->sync);
+            pthread_spin_unlock(&storage->sync);
             break;
         }
 
-        custom_spinlock_lock(&curr1->sync);
+        pthread_spin_lock(&curr1->sync);
 
-        custom_spinlock_unlock(&storage->sync);
+        pthread_spin_unlock(&storage->sync);
 
         Node *curr2 = curr1->next;
         while (curr2 != NULL) {
-            custom_spinlock_lock(&curr2->sync);
+            pthread_spin_lock(&curr2->sync);
             // оба потока на момент сравнения имеют захваченные мьютексы
             // это логика из условия: - необходимо блокировать все записи с данными которых производится работа
             update_counter(curr1, curr2, type);
 
-            custom_spinlock_unlock(&curr1->sync);
+            pthread_spin_unlock(&curr1->sync);
             curr1 = curr2;
             curr2 = curr1->next;
         }
 
-        custom_spinlock_unlock(&curr1->sync);
+        pthread_spin_unlock(&curr1->sync);
         
     }
     
@@ -96,24 +96,24 @@ void *swap_thread(void *data) {
     while (1) {
         Node *curr1, *curr2, *curr3;
 
-        custom_spinlock_lock(&storage->sync);
+        pthread_spin_lock(&storage->sync);
 
         if((curr1 = storage->first) == NULL) {
             printf("swap_thread(): curr1 is NULL\n");
-            custom_spinlock_unlock(&storage->sync);
+            pthread_spin_unlock(&storage->sync);
             break;
         }
 
-        custom_spinlock_lock(&curr1->sync);
+        pthread_spin_lock(&curr1->sync);
 
         if((curr2 = curr1->next) == NULL) {
             printf("swap_thread(): curr2 is NULL\n");
-            custom_spinlock_unlock(&curr1->sync);
-            custom_spinlock_unlock(&storage->sync);
+            pthread_spin_unlock(&curr1->sync);
+            pthread_spin_unlock(&storage->sync);
             break;
         }
 
-        custom_spinlock_lock(&curr2->sync);
+        pthread_spin_lock(&curr2->sync);
 
         if ((rand() % 2) == 0) {
             // ... -> *storage->first -> curr1 -> curr2 -> ...
@@ -124,11 +124,11 @@ void *swap_thread(void *data) {
             curr2 = curr1->next;
         }
 
-        custom_spinlock_unlock(&storage->sync);
+        pthread_spin_unlock(&storage->sync);
         // до конца списка делаю 50% свап узлов 
         curr3 = curr2->next;
         while (curr3 != NULL) {
-            custom_spinlock_lock(&curr3->sync);
+            pthread_spin_lock(&curr3->sync);
 
             if ((rand() % 2) == 0) {
                 swap_nodes(&curr1->next, curr2, curr3);
@@ -139,7 +139,7 @@ void *swap_thread(void *data) {
             Node *new_second = curr1->next;
             
             // освобождаю старый curr1 (он больше не будет первым в следующей тройке)
-            custom_spinlock_unlock(&curr1->sync);
+            pthread_spin_unlock(&curr1->sync);
 
             // сдвиг на узел вперед:
             curr1 = new_second; // новый первый узел следующей тройки
@@ -153,8 +153,8 @@ void *swap_thread(void *data) {
             }
         }
 
-        custom_spinlock_unlock(&curr1->sync);
-        custom_spinlock_unlock(&curr2->sync);
+        pthread_spin_unlock(&curr1->sync);
+        pthread_spin_unlock(&curr2->sync);
     }
 
     return NULL;

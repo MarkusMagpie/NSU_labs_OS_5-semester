@@ -39,6 +39,7 @@ void* handle_connection(void* arg) {
         close(client_fd);
         return NULL;
     }
+    printf("host_start: %s\n", host_start);
 
     host_start += 6; // "Host: "
     char* host_end = strstr(host_start, "\r\n");
@@ -46,6 +47,7 @@ void* handle_connection(void* arg) {
         close(client_fd);
         return NULL;
     }
+    printf("host_end: %s\n", host_end);
 
     // извлекаю имя хоста и порт в host
     char host[256];
@@ -56,6 +58,7 @@ void* handle_connection(void* arg) {
     }
     strncpy(host, host_start, host_len); // копирую до host_len символов из host_start в host
     host[host_len] = '\0';
+    printf("host: %s\n", host);
 
     // чтобы прокси мог соединиться с конечным сервером ему нужно получить IP‑адрес + нужно создать сокет для соеденения с конечным сервером
     struct hostent* server = gethostbyname(host);
@@ -88,7 +91,14 @@ void* handle_connection(void* arg) {
     }
 
     // пересылка запроса на конечный сервер
-    write(server_fd, buffer, bytes_read);
+    // write(server_fd, buffer, bytes_read);
+    int bytes_written = 0;
+    if (bytes_written = write(server_fd, buffer, bytes_read) < 0) {
+        printf("write() failed\n");
+        close(server_fd);
+        close(client_fd);
+        return NULL;
+    }
 
     // пересылка ответа от конечного сервера клиенту
     // когда сервер начнёт присылать данные прокси, я читаю их порциями и шлю обратно в client_fd

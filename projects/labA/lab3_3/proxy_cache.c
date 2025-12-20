@@ -1,88 +1,68 @@
 #include "mycache.h"
 
-void cache_init() {
-    pthread_mutex_init(&cache.mutex, NULL);
+cache_t cache;
 
-    for (int i = 0; i < MAX_CACHE_ENTRIES; i++) {
-        cache.entries[i] = NULL;
-    }
-}
-
-// поиск в кэше ключа "имя_сервера:тип(GET,POST,...) URL-путь"
-cache_entry_t *cache_find(const char *key) {
-    pthread_mutex_lock(&cache.mutex);
-    for (int i = 0; i < MAX_CACHE_ENTRIES; i++) {
-        if (cache.entries[i] && strcmp(cache.entries[i]->key, key) == 0) {
-            pthread_mutex_unlock(&cache.mutex);
-            return cache.entries[i];
-        }
-    }
-    pthread_mutex_unlock(&cache.mutex);
-    return NULL;
-}
-
-// добавление в кэш нового ключа
-cache_entry_t *cache_add(const char *key) {
-    cache_entry_t *entry = malloc(sizeof(cache_entry_t));
-    entry->key = strdup(key);
-    entry->data = NULL;
-    entry->size = 0;
-    entry->capacity = 0;
-    entry->is_complete = 0;
-    entry->is_error = 0;
-    entry->last_access = time(NULL);
-    pthread_mutex_init(&entry->mutex, NULL);
-    pthread_cond_init(&entry->cond, NULL);
+// модификация HTTP запроса
+void modify_http_request(char *request, size_t *request_len, const char *path, int use_http_1_0) {
+    char buffer[BUFFER_SIZE];
+    char *first_line_end = strstr(request, "\r\n");
     
-    pthread_mutex_lock(&cache.mutex);
-    for (int i = 0; i < MAX_CACHE_ENTRIES; i++) {
-        // нашел свободный элемент, заполняю его и возвращаю
-        if (!cache.entries[i]) {
-            cache.entries[i] = entry;
-            pthread_mutex_unlock(&cache.mutex);
-            return entry;
+    if (!first_line_end) return;
+    
+    // формирование новой первой строки
+    char method[16];
+    sscanf(request, "%15s", method);
+    
+    if (use_http_1_0) {
+        snprintf(buffer, sizeof(buffer), "%s %s HTTP/1.0\r\n", method, path);
+    } else {
+        snprintf(buffer, sizeof(buffer), "%s %s HTTP/1.1\r\n", method, path);
+    }
+    
+    // копия остальных заголовков
+    strcat(buffer, first_line_end + 2);
+    
+    // + "Connection: close" для HTTP/1.0
+    if (use_http_1_0 && !strstr(buffer, "Connection:")) {
+        char *headers_end = strstr(buffer, "\r\n\r\n");
+        if (headers_end) {
+            char temp[BUFFER_SIZE];
+            strcpy(temp, headers_end);
+            strcpy(headers_end, "\r\nConnection: close");
+            strcat(buffer, temp);
         }
     }
-
-    // если кэш заполнен полностью - ищу индекс самой старой записи и заменяю ее на новую
-    time_t oldest_time = cache.entries[0]->last_access;
-    int oldest_index = 0;
-    for (int i = 1; i < MAX_CACHE_ENTRIES; i++) {
-        if (cache.entries[i]->last_access < oldest_time && cache.entries[i]->is_complete) {
-            oldest_time = cache.entries[i]->last_access;
-            oldest_index = i;
-        }
+    
+    // копия обратно в request
+    size_t new_len = strlen(buffer);
+    if (new_len < BUFFER_SIZE) {
+        memcpy(request, buffer, new_len + 1);
+        *request_len = new_len;
     }
-    free(cache.entries[oldest_index]->key);
-    free(cache.entries[oldest_index]->data);
-    free(cache.entries[oldest_index]);
-    cache.entries[oldest_index] = entry;
-
-    pthread_mutex_unlock(&cache.mutex);
-    return entry;
 }
 
-// поток для загрузки данных с целевого сервера
 void *loader_thread(void *arg) {
     loader_data_t *data = (loader_data_t *)arg;
+    printf("[loader_thread] Начало загрузки ключа: %s\n", data->key);
     cache_entry_t *entry = cache_find(data->key);
     if (!entry) {
-        goto cleanup;
+        free(data->host);
+        free(data->request);
+        free(data);
+        return NULL;
     }
 
-    // чтобы прокси мог соединиться с конечным/целевым сервером ему нужно получить IP‑адрес, разрешив его имя
+    // получаю IP адрес целевого сервераы
     struct hostent *server = gethostbyname(data->host);
     if (!server) {
         pthread_mutex_lock(&entry->mutex);
-        // ждущие по cd потоки проснутся, увидят изменение флага и завершатся
         entry->is_error = 1;
         pthread_cond_broadcast(&entry->cond);
         pthread_mutex_unlock(&entry->mutex);
         goto cleanup;
     }
 
-    //----------------------------------------------------------------------------------------------------------------
-    // создаю TCP сокет для соединения с конечным сервером
+    // создаю соединение с целевым сервером
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
         pthread_mutex_lock(&entry->mutex);
@@ -92,13 +72,11 @@ void *loader_thread(void *arg) {
         goto cleanup;
     }
 
-    // настройка адреса сервера server_addr
     struct sockaddr_in server_addr;
     memcpy(&server_addr.sin_addr.s_addr, server->h_addr_list[0], server->h_length);
     server_addr.sin_family = AF_INET; // IP адрес к которому будет привязан сокет (IPv4)
     server_addr.sin_port = htons(data->port); // номер порта (в сетевом порядке байт) к которому будет привязан сокет
 
-    // попытка соединения с конечным сервером
     if (connect(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         close(server_fd);
         pthread_mutex_lock(&entry->mutex);
@@ -108,7 +86,7 @@ void *loader_thread(void *arg) {
         goto cleanup;
     }
 
-    // пересылка http-запроса клиента на конечный сервер
+    // отправка модифицированного запроса
     if (write(server_fd, data->request, data->request_len) < 0) {
         close(server_fd);
         pthread_mutex_lock(&entry->mutex);
@@ -117,25 +95,15 @@ void *loader_thread(void *arg) {
         pthread_mutex_unlock(&entry->mutex);
         goto cleanup;
     }
-    //----------------------------------------------------------------------------------------------------------------
 
-    // полученный от конечного сервера http-ответ сохраняется в кэш
+    // чтение ответа и сохранение в кэш
     char buffer[BUFFER_SIZE];
     ssize_t bytes_read;
     
     pthread_mutex_lock(&entry->mutex);
-
-    /* пример http-ответа из тетради
-    1) строка статуса: HTTP/1.0 200 OK
-    2) строки заголовков: 
-        Header1: Value1
-        Header2: Value2
-    3) тело ответа...
-    */
-    while (bytes_read = read(server_fd, buffer, sizeof(buffer))) {
-        if (bytes_read < 0) break;
-        
-        // если свободного места в текущем буфере < bytes_read, надо расширять буфер
+    
+    while ((bytes_read = read(server_fd, buffer, sizeof(buffer))) > 0) {
+        // увеличение буфера при необходимости
         if (entry->size + bytes_read > entry->capacity) {
             size_t new_capacity = entry->capacity * 2;
             if (new_capacity < entry->size + bytes_read) {
@@ -143,22 +111,39 @@ void *loader_thread(void *arg) {
             }
             
             char *new_data = realloc(entry->data, new_capacity);
+            if (!new_data) {
+                printf("[loader_thread] realloc failed  для ключа: %s\n", data->key);
+                entry->is_error = 1;
+                break;
+            }
             if (!new_data) break;
             
             entry->data = new_data;
             entry->capacity = new_capacity;
         }
         
-        // копирую считанные bytes_read из buffer в кэш entry->data+entry->size
+        // копия данных в кэш
         memcpy(entry->data + entry->size, buffer, bytes_read);
         entry->size += bytes_read;
         
-        // через cd оповещаю ждущие потоки о появлении новых данных
+        // опопвещение ждущих потоков о новых данных
         pthread_cond_broadcast(&entry->cond);
     }
+    if (bytes_read < 0) {
+        printf("[loader_thread] read failed из сокета для ключа: %s\n", data->key);
+        entry->is_error = 1;
+    }
+
+    if (!entry->is_error) {
+        entry->is_complete = 1;
+        printf("[loader_thread] завершена загрузка ключа: %s, размер: %d байт\n", data->key, entry->size);
+    } else {
+        printf("[loader_thread] загрузка ключа: %s завершилась с ошибкой\n", data->key);
+    }
     
-    // загрузка http-ответа в кэш завершена - оповещаю ждущие потоки
-    entry->is_complete = 1;
+    // тут уже загрузка завершена
+    // entry->is_complete = 1;
+    entry->last_access = time(NULL);
     pthread_cond_broadcast(&entry->cond);
     pthread_mutex_unlock(&entry->mutex);
     
@@ -171,7 +156,6 @@ cleanup:
     return NULL;
 }
 
-// обработка соединения с клиентом в отдельном потоке (вызывается когда в кэше уже лежит ключ)
 void *handle_connection(void *arg) {
     client_data_t *data = (client_data_t *)arg;
     int client_fd = data->client_fd;
@@ -185,36 +169,57 @@ void *handle_connection(void *arg) {
     }
 
     pthread_mutex_lock(&entry->mutex);
-    int sent = 0;
     
-    while (1) {
-        // отправка новых данных
-        while (sent < entry->size) {
-            int n = write(client_fd, entry->data + sent, entry->size - sent);
-            if (n <= 0) {
-                pthread_mutex_unlock(&entry->mutex);
-                close(client_fd);
-                return NULL;
-            }
-
-            sent += n;
-        }
-        
-        if (entry->is_complete || entry->is_error) break;
-        
-        // жду сообщения от loader_thread что появились новые данные от конечного сервера
+    // ожидание появления данных
+    while (!entry->is_complete && !entry->is_error && entry->size == 0) {
         pthread_cond_wait(&entry->cond, &entry->mutex);
     }
     
+    if (entry->is_error) {
+        const char *error_msg = "HTTP/1.0 502 Bad Gateway\r\n\r\nError loading resource";
+        write(client_fd, error_msg, strlen(error_msg));
+        pthread_mutex_unlock(&entry->mutex);
+        close(client_fd);
+        return NULL;
+    }
+    
+    // отправка данных клиенту
+    int sent = 0;
     while (sent < entry->size) {
         int n = write(client_fd, entry->data + sent, entry->size - sent);
         if (n <= 0) break;
         sent += n;
+        
+        // если данные еще загружаются -> жду новых
+        if (!entry->is_complete && sent == entry->size) {
+            pthread_cond_wait(&entry->cond, &entry->mutex);
+        }
     }
     
     pthread_mutex_unlock(&entry->mutex);
     close(client_fd);
     return NULL;
+}
+
+// для извлечения относительного пути из URL
+void extract_path_from_url(const char *url, char *path, size_t path_size) {
+    // если это абсолютный URL (начинается с http://) то хуйня надо менять
+    if (strncmp(url, "http://", 7) == 0) {
+        const char *path_start = strchr(url + 7, '/'); // пропуск "http://", посик первой "/" -> начало пути в URL
+        /*
+        url = "http://example.com/images/123.png"
+        path_start = "/images/123.png"
+        */
+        if (path_start) {
+            snprintf(path, path_size, "%s", path_start); // копирует path_start в path не превышая path_size байт
+            // path = "/images/123.png"
+        } else {
+            snprintf(path, path_size, "/");
+        }
+    } else {
+        // относительный путь: path = "/"
+        snprintf(path, path_size, "%s", url);
+    }
 }
 
 int main() {
@@ -223,20 +228,20 @@ int main() {
     // создаем TCP сокет
     /*
     socket() создает сокет, возвращает дескриптор сокета
-        AF_INET - протокол IPv4
-        SOCK_STREAM - TCP
-        0 - выбирается автоматически
+        __domain - AF_INET - протокол IPv4
+        __type - SOCK_STREAM - TCP
+        __protocol - 0 - выбирается автоматически
     */
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
-        printf("socket creation failed");
+        printf("socket creation failed\n");
         exit(EXIT_FAILURE);
     }
 
     // SO_REUSEADDR позволяет переиспользовать порт сразу после завершения сервера. даже если он в состоянии TIME_WAIT
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
-        printf("setsockopt failed");
+        printf("setsockopt failed\n");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
@@ -261,7 +266,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    printf("[main] КЭШИРУЮЩИЙ прокси-сервер слушает порт %d...\n", PORT);
+    printf("[main] Кэширующий прокси-сервер слушает порт %d...\n", PORT);
 
     while (1) {
         struct sockaddr_in client_addr;
@@ -270,14 +275,13 @@ int main() {
         // принятие нового соединения
         int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
         if (client_fd < 0) {
-            printf("accept failed");
+            printf("accept failed\n");
             continue;
         }
 
-        printf("[main] новое подключение от %s:%d\n", inet_ntoa(client_addr.sin_addr), client_addr.sin_port);
+        printf("[main] Новое подключение от %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-        //---------------------------------------------------------------------------------------
-        // чтение строки HTTP-запроса и заголовков из сокета клиента 
+        // читаю HTTP-запрос
         char buffer[BUFFER_SIZE];
         ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
         if (bytes_read <= 0) {
@@ -287,102 +291,111 @@ int main() {
         buffer[bytes_read] = '\0';
 
         // извлекаю имя хоста из строки заголовков 
-        char* host_start = strstr(buffer, "Host: ");
+        char *host_start = strstr(buffer, "Host: ");
         if (!host_start) {
-            const char* msg = "HTTP/1.0 400 Bad Request\r\n\r\nInvalid request";
+            const char *msg = "HTTP/1.0 400 Bad Request\r\n\r\nHost header required";
             write(client_fd, msg, strlen(msg));
             close(client_fd);
             continue;
         }
 
-        host_start += 6; // "Host: "
-        char* host_end = strstr(host_start, "\r\n");
+        host_start += 6;
+        char *host_end = strstr(host_start, "\r\n");
         if (!host_end) {
             close(client_fd);
             continue;
         }
 
-        // извлекаю имя сервера в host (дано: "Host: example.com", извлекаю: host="example.com") 
         char host[256];
         int host_len = host_end - host_start;
-        if (host_len > sizeof(host) - 1) {
-            host_len = sizeof(host) - 1;
-        }
-        strncpy(host, host_start, host_len); // копирую до host_len символов из host_start в host
+        strncpy(host, host_start, host_len);
         host[host_len] = '\0';
-        //---------------------------------------------------------------------------------------
         
-        // извлекаю тип и URL-путь для ключа из строки запроса (дано: "GET /courses/networks HTTP/1.1", извлекаю: method="GET", path="/courses/networks")
-        char *method = strtok(buffer, " ");
-        char *path = strtok(NULL, " ");
-        if (!method || !path) {
+        int port = PORT;
+
+        // извлекаю метод/тип_запроса и URL
+        char method[16], url[1024], version[16];
+        if (sscanf(buffer, "%15s %1023s %15s", method, url, version) != 3) {
+            const char *msg = "HTTP/1.0 400 Bad Request\r\n\r\nInvalid request line";
+            write(client_fd, msg, strlen(msg));
             close(client_fd);
             continue;
         }
-        
-        // формирую ключ кэша вида: имя_сервера:тип(GET,POST,...) URL-путь <-> example.com:GET /courses/networks
+
+        // извлекаю относительный путь из URL
+        char path[1024];
+        extract_path_from_url(url, path, sizeof(path));
+
+        // формирование ключ кэша
         char key[512];
         snprintf(key, sizeof(key), "%s:%s %s", host, method, path);
-        
-        // проверка - есть ли ключ key в кэше?
+        printf("[main] Ключ кэша: %s\n", key);
+
+        // модификация запроса для отправки на целевой сервер
+        size_t modified_len = bytes_read;
+        modify_http_request(buffer, &modified_len, path, 1); // HTTP/1.0
+
+        // проверка наличия кэш
         cache_entry_t *entry = cache_find(key);
         
-        if (entry) {
-            printf("[%s:%d] cache hit\n", inet_ntoa(client_addr.sin_addr), client_addr.sin_port);
-            // cache hit - создаю поток (раньше был fork()) для обработки нового соединения
-            pthread_t tid;
-            client_data_t* data = malloc(sizeof(client_data_t));
-            data->client_fd = client_fd;
-            data->key = strdup(key);
-
-            if (pthread_create(&tid, NULL, handle_connection, data)) {
-                printf("cache hit, pthread_create failed\n");
-                free(data->key);
-                free(data);
+        if (entry && entry->is_complete) {
+            printf("[main] Cache HIT для ключа: %s\n", key);
+            
+            // поток для клиента
+            client_data_t *client_data = malloc(sizeof(client_data_t));
+            client_data->client_fd = client_fd;
+            client_data->key = strdup(key);
+            
+            pthread_t client_tid;
+            if (pthread_create(&client_tid, NULL, handle_connection, client_data)) {
+                printf("pthread_create handle_connection failed\n");
+                free(client_data->key);
+                free(client_data);
                 close(client_fd);
             } else {
-                pthread_detach(tid);
+                pthread_detach(client_tid);
             }
         } else {
-            printf("[%s:%d] cache miss\n", inet_ntoa(client_addr.sin_addr), client_addr.sin_port);
-            // cache miss - создаю новую запись в кэше, запускаю loader_thread
-            entry = cache_add(key);
+            printf("[main] Cache MISS для ключа: %s\n", key);
             
+            // добавляю запись в кэш если ее тама еще нема
+            if (!entry) {
+                entry = cache_add(key);
+            }
+            
+            // поток для загрузки 
             loader_data_t *loader = malloc(sizeof(loader_data_t));
-            loader->key = strdup(key); // malloc-ом выделяю память под key
-            loader->request = malloc(bytes_read);
-            memcpy(loader->request, buffer, bytes_read);
-            loader->request_len = bytes_read;
+            loader->key = strdup(key);
+            loader->request = malloc(modified_len);
+            memcpy(loader->request, buffer, modified_len);
+            loader->request_len = modified_len;
             loader->host = strdup(host);
-            loader->port = PORT;
+            loader->port = port;
             
-            // loader_thread соединится с целевым сервером, сохранит данные в кэш и закроет соединение
             pthread_t loader_tid;
             if (pthread_create(&loader_tid, NULL, loader_thread, loader)) {
-                printf("cache miss, pthread_create for loader_thread failed\n");
+                printf("pthread_create loader_thread failed\n");
                 free(loader->key);
                 free(loader->request);
                 free(loader->host);
                 free(loader);
-
-                close(client_fd);
             } else {
                 pthread_detach(loader_tid);
-                
-                // клиента обрабатываю в отдельном потоке, как при cache hit
-                pthread_t tid;
-                client_data_t *data = malloc(sizeof(client_data_t));
-                data->client_fd = client_fd;
-                data->key = strdup(key);
-                
-                if (pthread_create(&tid, NULL, handle_connection, data)) {
-                    printf("cache miss, pthread_create for client failed\n");
-                    free(data->key);
-                    free(data);
-                    close(client_fd);
-                } else {
-                    pthread_detach(tid);
-                }
+            }
+            
+            // поток для клиента
+            client_data_t *client_data = malloc(sizeof(client_data_t));
+            client_data->client_fd = client_fd;
+            client_data->key = strdup(key);
+            
+            pthread_t client_tid;
+            if (pthread_create(&client_tid, NULL, handle_connection, client_data)) {
+                printf("pthread_create handle_connection failed\n");
+                free(client_data->key);
+                free(client_data);
+                close(client_fd);
+            } else {
+                pthread_detach(client_tid);
             }
         }
     }

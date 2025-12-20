@@ -14,7 +14,7 @@
 
 // структура элемента кэша
 typedef struct {
-    char *key; // ключ кэша <-> URL
+    char *key; // ключ кэша <-> URL-путь
     char *data; // данные 
     int size; // текущий размер данных
     int capacity; // максимальный размер данных/выделенная память
@@ -47,11 +47,8 @@ typedef struct {
     char *key;
 } client_data_t;
 
-cache_t cache;
+extern cache_t cache;
 
 void cache_init();
 cache_entry_t *cache_find(const char *key);
 cache_entry_t *cache_add(const char *key);
-void *loader_thread(void *arg);
-// для обработки соединения в отдельном потоке
-void *handle_connection(void *arg);

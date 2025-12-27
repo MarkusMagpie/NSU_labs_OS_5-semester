@@ -43,7 +43,7 @@
 
     как запускать: 
         1 терминал: 
-            gcc -o proxy proxy_cache.c && sudo ./proxy
+            gcc -o proxy proxy_cache.c mycache.c && sudo ./proxy
         2 терминал: 
             curl -v -x http://localhost:80 http://example.com/
 

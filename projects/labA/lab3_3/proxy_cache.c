@@ -2,8 +2,43 @@
 
 cache_t cache;
 
+// чтение HTTP запроса до конца заголовков
+ssize_t read_http_request(int fd, char *buffer, size_t max_size) {
+    size_t total_read = 0;
+    ssize_t bytes;
+    char *headers_end = NULL;
+    
+    // читаю пока не найду конец заголовков или не заполнится буфер
+    while (total_read < max_size - 1) {
+        bytes = recv(fd, buffer + total_read, max_size - 1 - total_read, 0);
+        if (bytes <= 0) {
+            // error или соединение закрыто клиентом
+            return -1;
+        }
+        
+        total_read += bytes;
+        buffer[total_read] = '\0'; // строка завершенная
+        
+        // поиск конца заголовков "\r\n\r\n" в том что уже прочтено
+        headers_end = strstr(buffer, "\r\n\r\n");
+        if (headers_end) {
+            return total_read;
+        }
+        
+        // запрос слишком длинный и конца заголовков нет -> защита
+        if (total_read > 16 * 1024) { // НАПРИМЕР лимит 16KB на строку запроса
+            printf("[main] Слишком длинные заголовки запроса\n");
+            return -1;
+        }
+    }
+    
+    // буфер переполнен, а конца заголовков так и не нашел
+    printf("[main] Буфер переполнен или некорректный запрос\n");
+    return -1;
+}
+
 // модификация HTTP запроса
-void modify_http_request(char *request, size_t *request_len, const char *path, int use_http_1_0) {
+void modify_http_request(char *request, size_t *request_len, const char *path) {
     char buffer[BUFFER_SIZE];
     char *first_line_end = strstr(request, "\r\n");
     
@@ -13,17 +48,11 @@ void modify_http_request(char *request, size_t *request_len, const char *path, i
     char method[16];
     sscanf(request, "%15s", method);
     
-    if (use_http_1_0) {
-        snprintf(buffer, sizeof(buffer), "%s %s HTTP/1.0\r\n", method, path);
-    } else {
-        snprintf(buffer, sizeof(buffer), "%s %s HTTP/1.1\r\n", method, path);
-    }
-    
+    snprintf(buffer, sizeof(buffer), "%s %s HTTP/1.0\r\n", method, path);
     // копия остальных заголовков
     strcat(buffer, first_line_end + 2);
-    
-    // + "Connection: close" для HTTP/1.0
-    if (use_http_1_0 && !strstr(buffer, "Connection:")) {
+
+    if (!strstr(buffer, "Connection:")) {
         char *headers_end = strstr(buffer, "\r\n\r\n");
         if (headers_end) {
             char temp[BUFFER_SIZE];
@@ -32,7 +61,7 @@ void modify_http_request(char *request, size_t *request_len, const char *path, i
             strcat(buffer, temp);
         }
     }
-    
+
     // копия обратно в request
     size_t new_len = strlen(buffer);
     if (new_len < BUFFER_SIZE) {
@@ -283,8 +312,9 @@ int main() {
 
         // читаю HTTP-запрос
         char buffer[BUFFER_SIZE];
-        ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
+        ssize_t bytes_read = read_http_request(client_fd, buffer, sizeof(buffer));
         if (bytes_read <= 0) {
+            printf("[main] Не удалось прочитать запрос или соединение закрыто\n");
             close(client_fd);
             continue;
         }
@@ -331,9 +361,9 @@ int main() {
         snprintf(key, sizeof(key), "%s:%s %s", host, method, path);
         printf("[main] Ключ кэша: %s\n", key);
 
-        // модификация запроса для отправки на целевой сервер
+        // модификация клиентского запроса для отправки на целевой сервер
         size_t modified_len = bytes_read;
-        modify_http_request(buffer, &modified_len, path, 1); // HTTP/1.0
+        modify_http_request(buffer, &modified_len, path);
 
         // проверка наличия кэш
         cache_entry_t *entry = cache_find(key);

@@ -357,7 +357,7 @@ int main() {
         extract_path_from_url(url, path, sizeof(path));
 
         // формирование ключ кэша
-        char key[512];
+        char key[2048];
         snprintf(key, sizeof(key), "%s:%s %s", host, method, path);
         printf("[main] Ключ кэша: %s\n", key);
 
@@ -390,27 +390,41 @@ int main() {
             
             // добавляю запись в кэш если ее тама еще нема
             if (!entry) {
-                entry = cache_add(key);
+                // entry = cache_add(key);
+                entry = cache_get_or_add(key);
             }
+
+            // НОВОЕ: атомарная проверка: начата ли уже загрузка?
+            pthread_mutex_lock(&entry->mutex);
+            int should_create_loader = 0;
+            if (!entry->is_complete && !entry->is_loading) {
+                entry->is_loading = 1;  // <-- отмечаем, что загрузка начата
+                should_create_loader = 1;
+            }
+            pthread_mutex_unlock(&entry->mutex);
             
-            // поток для загрузки 
-            loader_data_t *loader = malloc(sizeof(loader_data_t));
-            loader->key = strdup(key);
-            loader->request = malloc(modified_len);
-            memcpy(loader->request, buffer, modified_len);
-            loader->request_len = modified_len;
-            loader->host = strdup(host);
-            loader->port = port;
-            
-            pthread_t loader_tid;
-            if (pthread_create(&loader_tid, NULL, loader_thread, loader)) {
-                printf("pthread_create loader_thread failed\n");
-                free(loader->key);
-                free(loader->request);
-                free(loader->host);
-                free(loader);
+            if (should_create_loader) {
+                // поток для загрузки 
+                loader_data_t *loader = malloc(sizeof(loader_data_t));
+                loader->key = strdup(key);
+                loader->request = malloc(modified_len);
+                memcpy(loader->request, buffer, modified_len);
+                loader->request_len = modified_len;
+                loader->host = strdup(host);
+                loader->port = port;
+                
+                pthread_t loader_tid;
+                if (pthread_create(&loader_tid, NULL, loader_thread, loader)) {
+                    printf("pthread_create loader_thread failed\n");
+                    free(loader->key);
+                    free(loader->request);
+                    free(loader->host);
+                    free(loader);
+                } else {
+                    pthread_detach(loader_tid);
+                }
             } else {
-                pthread_detach(loader_tid);
+                printf("[main] Загрузка для ключа %s уже начата другим потоком\n", key);
             }
             
             // поток для клиента

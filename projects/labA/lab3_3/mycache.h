@@ -18,6 +18,7 @@ typedef struct {
     char *data; // данные 
     int size; // текущий размер данных
     int capacity; // максимальный размер данных/выделенная память
+    int is_loading;
     int is_complete; // флаг завершения загрузки http-ответа в кэш 
     int is_error; // флаг ошибки
     time_t last_access; // время последнего обращения
@@ -52,3 +53,4 @@ extern cache_t cache;
 void cache_init();
 cache_entry_t *cache_find(const char *key);
 cache_entry_t *cache_add(const char *key);
+cache_entry_t *cache_get_or_add(const char *key);

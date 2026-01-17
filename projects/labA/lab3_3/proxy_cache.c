@@ -398,7 +398,7 @@ int main() {
             pthread_mutex_lock(&entry->mutex);
             int should_create_loader = 0;
             if (!entry->is_complete && !entry->is_loading) {
-                entry->is_loading = 1;  // <-- отмечаем, что загрузка начата
+                entry->is_loading = 1;  // пометка что загрузка начата
                 should_create_loader = 1;
             }
             pthread_mutex_unlock(&entry->mutex);

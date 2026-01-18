@@ -24,12 +24,6 @@ ssize_t read_http_request(int fd, char *buffer, size_t max_size) {
         if (headers_end) {
             return total_read;
         }
-        
-        // запрос слишком длинный и конца заголовков нет -> защита
-        if (total_read > 16 * 1024) { // НАПРИМЕР лимит 16KB на строку запроса
-            printf("[main] Слишком длинные заголовки запроса\n");
-            return -1;
-        }
     }
     
     // буфер переполнен, а конца заголовков так и не нашел

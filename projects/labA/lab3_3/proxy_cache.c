@@ -139,7 +139,6 @@ void *loader_thread(void *arg) {
                 entry->is_error = 1;
                 break;
             }
-            if (!new_data) break;
             
             entry->data = new_data;
             entry->capacity = new_capacity;
@@ -159,13 +158,11 @@ void *loader_thread(void *arg) {
 
     if (!entry->is_error) {
         entry->is_complete = 1;
-        printf("[loader_thread] завершена загрузка ключа: %s, размер: %d байт\n", data->key, entry->size);
-    } else {
-        printf("[loader_thread] загрузка ключа: %s завершилась с ошибкой\n", data->key);
     }
     
     // тут уже загрузка завершена
-    // entry->is_complete = 1;
+    printf("[loader_thread] завершена загрузка ключа: %s, размер: %d байт\n", data->key, entry->size);
+    entry->is_loading = 0;
     entry->last_access = time(NULL);
     pthread_cond_broadcast(&entry->cond);
     pthread_mutex_unlock(&entry->mutex);
@@ -208,10 +205,17 @@ void *handle_connection(void *arg) {
     
     // отправка данных клиенту
     int sent = 0;
-    while (sent < entry->size) {
-        int n = write(client_fd, entry->data + sent, entry->size - sent);
-        if (n <= 0) break;
-        sent += n;
+    while (sent < entry->size || !entry->is_complete) {
+        // int n = write(client_fd, entry->data + sent, entry->size - sent);
+        // if (n <= 0) break;
+        // sent += n;
+
+        if (sent < entry->size) {
+            int to_send = entry->size - sent;
+            int n = write(client_fd, entry->data + sent, to_send);
+            if (n <= 0) break;
+            sent += n;
+        }
         
         // если данные еще загружаются -> жду новых
         if (!entry->is_complete && sent == entry->size) {
@@ -418,7 +422,14 @@ int main() {
                     pthread_detach(loader_tid);
                 }
             } else {
-                printf("[main] Загрузка для ключа %s уже начата другим потоком\n", key);
+                // printf("[main] Загрузка для ключа %s уже начата другим потоком\n", key);
+                if (entry->is_loading) {
+                    printf("[main] Загрузка для ключа %s В ПРОЦЕССЕ загрузки другим потоком\n", key);
+                } else if (entry->is_complete) {
+                    printf("[main] Загрузка для ключа %s уже ЗАВЕРШЕНА другим потоком\n", key);
+                } else {
+                    printf("[main] Загрузка для ключа %s в неизвестном состоянии\n", key);
+                }
             }
             
             // поток для клиента

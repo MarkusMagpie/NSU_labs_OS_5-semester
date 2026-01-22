@@ -24,6 +24,12 @@ ssize_t read_http_request(int fd, char *buffer, size_t max_size) {
         if (headers_end) {
             return total_read;
         }
+
+        // буфер переполнен
+        if (total_read >= max_size - 1) {
+            printf("[main] Буфер переполнен\n");
+            return -1;
+        }
     }
     
     // буфер переполнен, а конца заголовков так и не нашел
@@ -46,15 +52,16 @@ void modify_http_request(char *request, size_t *request_len, const char *path) {
     // копия остальных заголовков
     strcat(buffer, first_line_end + 2);
 
-    if (!strstr(buffer, "Connection:")) {
-        char *headers_end = strstr(buffer, "\r\n\r\n");
-        if (headers_end) {
-            char temp[BUFFER_SIZE];
-            strcpy(temp, headers_end);
-            strcpy(headers_end, "\r\nConnection: close");
-            strcat(buffer, temp);
-        }
-    }
+    // дегенерат блять
+    // if (!strstr(buffer, "Connection:")) {
+    //     char *headers_end = strstr(buffer, "\r\n\r\n");
+    //     if (headers_end) {
+    //         char temp[BUFFER_SIZE];
+    //         strcpy(temp, headers_end);
+    //         strcpy(headers_end, "\r\nConnection: close");
+    //         strcat(buffer, temp);
+    //     }
+    // }
 
     // копия обратно в request
     size_t new_len = strlen(buffer);
@@ -95,6 +102,12 @@ void *loader_thread(void *arg) {
         goto cleanup;
     }
 
+    // struct timeval tv;
+    // tv.tv_sec = 10;
+    // tv.tv_usec = 0;
+    // setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(tv));
+    // setsockopt(server_fd, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv, sizeof(tv));
+
     struct sockaddr_in server_addr;
     memcpy(&server_addr.sin_addr.s_addr, server->h_addr_list[0], server->h_length);
     server_addr.sin_family = AF_INET; // IP адрес к которому будет привязан сокет (IPv4)
@@ -122,10 +135,21 @@ void *loader_thread(void *arg) {
     // чтение ответа и сохранение в кэш
     char buffer[BUFFER_SIZE];
     ssize_t bytes_read;
+    // int is_first_chunk = 1;
     
     pthread_mutex_lock(&entry->mutex);
     
     while ((bytes_read = read(server_fd, buffer, sizeof(buffer))) > 0) {
+        // if (is_first_chunk) {
+        //     is_first_chunk = 0;
+        //     printf("[loader_thread] первые %ld байт ответа от сервера для %s:\n", bytes_read, data->key);
+            
+        //     for (int i = 0; i < bytes_read; i++) {
+        //         putchar(buffer[i]);
+        //     }
+        //     printf("\n[loader_thread] Конец вывода первых байт\n");
+        // }
+
         // увеличение буфера при необходимости
         if (entry->size + bytes_read > entry->capacity) {
             size_t new_capacity = entry->capacity * 2;

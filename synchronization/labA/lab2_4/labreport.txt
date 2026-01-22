@@ -64,8 +64,18 @@
                 кастомный спинлок: (14496791 + 2900234 + 2899988 + 23201623) / 10 = 4.35 млн/сек
                 posix спинлок: (31329805 + 6326681 + 6319573 + 50426202) / 10 = 9.44 млн/сек 
 
-                ? почему posix спинлок быстрее
-                - 
+                ? почему posix спинлок быстрее кастомного
+                -   posix спинлок: 
+                        нерекурсивный так как повторный захват тем же потоком приведёт к deadlock
+                            (не отслеживает владельца - это просто атомарный флаг -> нет gettid())
+                        ожидание - активное ожидание с оптимизированными паузами (pause инструкция на x86)
+                        реализация - в ядре линукс реализован атомарной инструкцией xchg (об этом говорил при сдаче 2.1 )
+
+                    кастомный спинлок:
+                        рекурсивный так как поддерживает повторный захват тем же потоком (-> накладные расходы на cpu)
+                        ожидание - busy-wait без пауз между поптыками
+
+
 
             мьютекс: 
                 cd custom_mutex
@@ -101,9 +111,17 @@
                 кастомный мьютекс: (5636745 + 1088154 + 1087050 + 8671489) / 10 = 16.5 млн/сек
                 posix мьютекс: (22103301 + 2724239 + 2771038 + 21627205) / 10 = 53.85 млн/сек
 
-                ? почему posix мьютекс быстрее
-                -   у меня каждый промах CAS операции -> системный вызов (это дорого)
-                    pthread мьютексы используют адаптивное спин-ожидание
+                ? почему posix мьютекс быстрее кастомного
+                -   у меня каждый промах CAS операции -> системный вызов futex_wait() (это дорого)
+                    pthread мьютексы используют адаптивное спин-ожидание (число попыток захвата лока до futex_wait())
+                    цитата:
+                        Under SMP, when you go to acquire a mutex and see that it is locked, 
+                            it can be sub-optimal to simply give up and call into the kernel to block. 
+                            If the owner of the lock only holds the lock for a few instructions, 
+                            it is cheaper to just wait for the execution of those instructions, 
+                            and then acquire the lock with an atomic operation, 
+                            instead of spending hundreds of extra cycles by making a system call.
+                        взято отсюда: https://stackoverflow.com/questions/19863734/what-is-pthread-mutex-adaptive-np
 
             ? почему posix мьютекс быстрее posix спинлока 
             -   
